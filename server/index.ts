@@ -7,7 +7,11 @@ import http from 'node:http';
 import cors from 'cors';
 import path from 'node:path';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import { MicroDBEngine } from './core/binaryEngine.js';
 import { SchemaParser } from './core/schemaParser.js';
@@ -1053,12 +1057,20 @@ app.get('/api/index/:name', (req, res) => {
   }
 });
 
-// Servir frontend compilado en producción si existe
-const clientDist = path.join(process.cwd(), 'dist');
-if (fs.existsSync(clientDist)) {
+// Servir frontend compilado en producción
+const possibleDistPaths = [
+  path.join(__dirname, '../dist'),
+  path.join(__dirname, 'dist'),
+  path.join(process.cwd(), 'dist'),
+  path.join(process.cwd(), 'resources/app.asar/dist'),
+  path.join(process.cwd(), 'resources/app/dist')
+];
+
+let clientDist = possibleDistPaths.find((p) => fs.existsSync(p));
+if (clientDist) {
   app.use(express.static(clientDist));
   app.get('*', (_req, res) => {
-    res.sendFile(path.join(clientDist, 'index.html'));
+    res.sendFile(path.join(clientDist!, 'index.html'));
   });
 }
 

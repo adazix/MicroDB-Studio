@@ -1,41 +1,44 @@
 // ============================================================================
-// MICRODB STUDIO - ELECTRON DESKTOP RUNTIME & WINDOW LIFECYCLE
+// MICRODB STUDIO - ELECTRON DESKTOP RUNTIME & IN-PROCESS BACKEND
 // ============================================================================
 
-const { app, BrowserWindow, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, shell } = require('electron');
 const path = require('path');
 const http = require('http');
-const { fork } = require('child_process');
+const fs = require('fs');
+const { pathToFileURL } = require('url');
 
 let mainWindow = null;
-let serverProcess = null;
 const SERVER_PORT = 3001;
 
-// Iniciar el servidor backend en segundo plano
-function startBackendServer() {
-  const serverScript = path.join(__dirname, '../dist-server/index.js');
-  
+// Iniciar el servidor backend directamente dentro del runtime de Electron
+async function startBackendServer() {
+  process.env.PORT = String(SERVER_PORT);
+  process.env.NODE_ENV = 'production';
+
+  const possiblePaths = [
+    path.join(__dirname, '../dist-server/index.js'),
+    path.join(__dirname, 'dist-server/index.js'),
+    path.join(process.resourcesPath || '', 'app.asar/dist-server/index.js'),
+    path.join(process.resourcesPath || '', 'app/dist-server/index.js'),
+    path.join(process.cwd(), 'dist-server/index.js')
+  ];
+
+  const serverScript = possiblePaths.find((p) => fs.existsSync(p)) || possiblePaths[0];
+
   try {
-    serverProcess = fork(serverScript, [], {
-      env: { ...process.env, PORT: SERVER_PORT, NODE_ENV: 'production' },
-      stdio: 'inherit'
-    });
-
-    serverProcess.on('error', (err) => {
-      console.error('[Electron Backend Error]:', err);
-    });
-
-    serverProcess.on('exit', (code) => {
-      console.log(`[Electron Backend] Servidor finalizado con código: ${code}`);
-    });
+    const fileUrl = pathToFileURL(serverScript).href;
+    console.log('[Electron Main] Iniciando Backend REST & WebSocket in-process desde:', fileUrl);
+    await import(fileUrl);
+    console.log('[Electron Main] Backend Express + WebSockets iniciado exitosamente.');
   } catch (err) {
-    console.error('Error lanzando backend:', err);
+    console.error('[Electron Main] Error crítico al iniciar backend in-process:', err);
   }
 }
 
-// Esperar a que el servidor Express esté escuchando en el puerto 3001
-function waitForServer(retries = 30, delay = 200) {
-  return new Promise((resolve, reject) => {
+// Esperar a que el servidor Express esté escuchando en el puerto local
+function waitForServer(retries = 40, delay = 150) {
+  return new Promise((resolve) => {
     let attempts = 0;
     const interval = setInterval(() => {
       attempts++;
@@ -57,6 +60,15 @@ function waitForServer(retries = 30, delay = 200) {
 }
 
 async function createWindow() {
+  // Resolver ícono para la ventana
+  const possibleIcons = [
+    path.join(__dirname, '../public/icon.png'),
+    path.join(__dirname, 'public/icon.png'),
+    path.join(process.resourcesPath || '', 'app.asar/public/icon.png'),
+    path.join(process.cwd(), 'public/icon.png')
+  ];
+  const appIcon = possibleIcons.find((p) => fs.existsSync(p));
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 880,
@@ -64,7 +76,7 @@ async function createWindow() {
     minHeight: 700,
     backgroundColor: '#0d1117',
     title: 'MicroDB Studio - SD & Embedded Database Manager',
-    icon: path.join(__dirname, '../public/icon.png'),
+    icon: appIcon,
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
@@ -84,7 +96,7 @@ async function createWindow() {
     mainWindow.show();
   });
 
-  // Cargar URL del servidor local
+  // Esperar a que el backend inicie y cargar URL del servidor local
   await waitForServer();
   mainWindow.loadURL(`http://localhost:${SERVER_PORT}`);
 
@@ -93,9 +105,9 @@ async function createWindow() {
   });
 }
 
-// Inicialización de la aplicación
+// Inicialización de la aplicación Electron
 app.whenReady().then(async () => {
-  startBackendServer();
+  await startBackendServer();
   await createWindow();
 
   app.on('activate', () => {
@@ -107,18 +119,7 @@ app.whenReady().then(async () => {
 
 // Limpieza al cerrar la aplicación
 app.on('window-all-closed', () => {
-  if (serverProcess) {
-    serverProcess.kill();
-    serverProcess = null;
-  }
   if (process.platform !== 'darwin') {
     app.quit();
-  }
-});
-
-app.on('will-quit', () => {
-  if (serverProcess) {
-    serverProcess.kill();
-    serverProcess = null;
   }
 });

@@ -43,22 +43,29 @@ export const Navbar: React.FC<NavbarProps> = ({
   onRefresh,
   isWatching
 }) => {
+  const isConnected = Boolean(currentDirectory);
+
   return (
-    <header className="h-16 bg-[#161b22] border-b border-[#30363d] px-5 flex items-center justify-between z-30 select-none">
+    <header className="h-16 bg-[#161b22] border-b border-[#30363d] px-4 sm:px-5 flex items-center justify-between z-30 select-none gap-2">
       {/* Brand & Logo */}
-      <div className="flex items-center space-x-6">
-        <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActiveTab('tables')}>
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-600 via-blue-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-sky-500/20">
-            <Database className="w-5 h-5 text-white" />
-          </div>
+      <div className="flex items-center space-x-3 sm:space-x-4 shrink-0">
+        <div 
+          className="flex items-center space-x-2.5 cursor-pointer group"
+          onClick={() => setActiveTab('tables')}
+        >
+          <img 
+            src="/favicon.png" 
+            alt="Logo" 
+            className="h-8 w-auto object-contain filter drop-shadow-[0_0_8px_rgba(56,189,248,0.7)] group-hover:scale-105 transition-transform shrink-0" 
+          />
           <div>
-            <div className="flex items-center space-x-2">
-              <span className="font-extrabold text-lg text-white tracking-tight">MicroDB</span>
-              <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">
+            <div className="flex items-center space-x-1.5">
+              <span className="font-extrabold text-base sm:text-lg text-white tracking-tight">MicroDB</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">
                 STUDIO
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-medium">SD & Embedded DB Manager</p>
+            <p className="text-[10px] text-slate-400 font-medium hidden sm:block">SD & Embedded DB Manager</p>
           </div>
         </div>
 
@@ -66,116 +73,141 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center space-x-1.5">
           <button
             onClick={onOpenDriveModal}
-            className="flex items-center space-x-2 bg-[#0d1117] hover:bg-[#21262d] border border-[#30363d] hover:border-sky-500/50 rounded-lg px-3 py-1.5 transition-all text-xs max-w-sm group"
+            className={`flex items-center space-x-2 bg-[#0d1117] hover:bg-[#21262d] border border-[#30363d] hover:border-sky-500/50 rounded-lg px-2.5 sm:px-3 py-1.5 transition-all text-xs max-w-[140px] sm:max-w-[200px] md:max-w-[280px] group ${
+              !isConnected ? 'animate-pulse border-sky-500/40 text-sky-300' : ''
+            }`}
             title="Cambiar carpeta o Tarjeta SD"
           >
-            <FolderOpen className="w-4 h-4 text-sky-400 shrink-0 group-hover:scale-110 transition-transform" />
-            <span className="font-mono text-slate-300 truncate max-w-[200px]">
-              {currentDirectory || 'Seleccionar SD o Carpeta...'}
+            <FolderOpen className="w-3.5 h-3.5 text-sky-400 shrink-0 group-hover:scale-110 transition-transform" />
+            <span className="font-mono text-slate-300 truncate text-[11px] sm:text-xs">
+              {currentDirectory || 'Seleccionar SD...'}
             </span>
-            {activeDatabase && activeDatabase !== '/' && (
-              <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono text-[10px] font-bold border border-sky-500/30">
+            {isConnected && activeDatabase && activeDatabase !== '/' && (
+              <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-mono text-[9px] sm:text-[10px] font-bold border border-sky-500/30 hidden md:inline">
                 /{activeDatabase}
               </span>
             )}
             {isWatching && (
-              <span className="flex items-center space-x-1 pl-1 text-emerald-400 font-semibold text-[10px] shrink-0">
+              <span className="hidden lg:flex items-center space-x-1 pl-1 text-emerald-400 font-semibold text-[10px] shrink-0">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>LIVE SD</span>
+                <span>LIVE</span>
               </span>
             )}
           </button>
 
-          {currentDirectory && onCloseDirectory && (
+          {isConnected && onCloseDirectory && (
             <button
               onClick={onCloseDirectory}
-              className="p-1.5 bg-[#0d1117] hover:bg-rose-500/20 border border-[#30363d] hover:border-rose-500/50 text-slate-400 hover:text-rose-400 rounded-lg transition-all"
+              className="p-1.5 bg-[#0d1117] hover:bg-rose-500/20 border border-[#30363d] hover:border-rose-500/50 text-slate-400 hover:text-rose-400 rounded-lg transition-all shrink-0"
               title="Cerrar ubicación actual y volver a la pantalla de bienvenida"
             >
-              <FolderX className="w-4 h-4" />
+              <FolderX className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
 
-      {/* Center Navigation Tabs */}
-      <div className="flex items-center bg-[#0d1117] p-1 rounded-xl border border-[#30363d]">
-        <button
-          onClick={() => setActiveTab('tables')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'tables'
-              ? 'bg-sky-500 text-white shadow-md shadow-sky-500/25'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-[#1c2128]'
-          }`}
-        >
-          <HardDrive className="w-4 h-4" />
-          <span>Explorador de Tablas</span>
-        </button>
+      {/* Center Navigation Tabs - Only when connected */}
+      {isConnected ? (
+        <div className="flex items-center bg-[#0d1117] p-1 rounded-xl border border-[#30363d] shrink-0">
+          <button
+            onClick={() => setActiveTab('tables')}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'tables'
+                ? 'bg-sky-500 text-white shadow-md shadow-sky-500/25'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#1c2128]'
+            }`}
+          >
+            <HardDrive className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Explorador de Tablas</span>
+            <span className="md:hidden">Tablas</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('sql')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'sql'
-              ? 'bg-sky-500 text-white shadow-md shadow-sky-500/25'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-[#1c2128]'
-          }`}
-        >
-          <Terminal className="w-4 h-4" />
-          <span>Consola SQL</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('sql')}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'sql'
+                ? 'bg-sky-500 text-white shadow-md shadow-sky-500/25'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#1c2128]'
+            }`}
+          >
+            <Terminal className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Consola SQL</span>
+            <span className="md:hidden">SQL</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('sectors')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'sectors'
-              ? 'bg-sky-500 text-white shadow-md shadow-sky-500/25'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-[#1c2128]'
-          }`}
-        >
-          <Radio className="w-4 h-4" />
-          <span>Mapa de Sectores & Salud</span>
-        </button>
-      </div>
+          <button
+            onClick={() => setActiveTab('sectors')}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'sectors'
+                ? 'bg-sky-500 text-white shadow-md shadow-sky-500/25'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#1c2128]'
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">Mapa de Sectores</span>
+            <span className="lg:hidden">Sectores</span>
+          </button>
+        </div>
+      ) : (
+        <div className="hidden md:flex items-center space-x-2 text-xs text-slate-500 font-medium">
+          <span className="w-2 h-2 rounded-full bg-slate-600"></span>
+          <span>Sin tarjeta SD o directorio conectado</span>
+        </div>
+      )}
 
       {/* Right Global Action Buttons */}
-      <div className="flex items-center space-x-3">
-        {/* DBeaver Bridge Button */}
-        <button
-          onClick={onOpenDBeaverModal}
-          className="flex items-center space-x-1.5 bg-gradient-to-r from-amber-600/20 to-orange-600/20 hover:from-amber-600/30 hover:to-orange-600/30 border border-amber-500/40 text-amber-300 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105 active:scale-95"
-          title="Conectar con DBeaver mediante SQLite Bridge"
-        >
-          <Share2 className="w-3.5 h-3.5" />
-          <span>Puente DBeaver</span>
-        </button>
+      <div className="flex items-center space-x-2 shrink-0">
+        {isConnected ? (
+          <>
+            {/* DBeaver Bridge Button */}
+            <button
+              onClick={onOpenDBeaverModal}
+              className="flex items-center space-x-1.5 bg-gradient-to-r from-amber-600/20 to-orange-600/20 hover:from-amber-600/30 hover:to-orange-600/30 border border-amber-500/40 text-amber-300 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+              title="Conectar con DBeaver mediante SQLite Bridge"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">DBeaver</span>
+            </button>
 
-        {/* Export Modal Button */}
-        <button
-          onClick={onOpenExportModal}
-          className="flex items-center space-x-1.5 bg-[#21262d] hover:bg-[#30363d] text-slate-200 border border-[#30363d] px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105 active:scale-95"
-          title="Exportar a CSV, Excel, JSON o SQL"
-        >
-          <Download className="w-3.5 h-3.5" />
-          <span>Exportar</span>
-        </button>
+            {/* Export Modal Button */}
+            <button
+              onClick={onOpenExportModal}
+              className="flex items-center space-x-1.5 bg-[#21262d] hover:bg-[#30363d] text-slate-200 border border-[#30363d] px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+              title="Exportar a CSV, Excel, JSON o SQL"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Exportar</span>
+            </button>
 
-        {/* New Table Button */}
-        <button
-          onClick={onOpenNewTableModal}
-          className="flex items-center space-x-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105 active:scale-95"
-        >
-          <PlusCircle className="w-3.5 h-3.5" />
-          <span>Nueva Tabla</span>
-        </button>
+            {/* New Table Button */}
+            <button
+              onClick={onOpenNewTableModal}
+              className="flex items-center space-x-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Nueva Tabla</span>
+              <span className="sm:hidden">+ Tabla</span>
+            </button>
 
-        {/* Refresh Button */}
-        <button
-          onClick={onRefresh}
-          className="p-2 bg-[#21262d] hover:bg-[#30363d] text-slate-300 hover:text-white rounded-lg border border-[#30363d] transition-all hover:rotate-180 duration-300"
-          title="Recargar archivos de la SD"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
+            {/* Refresh Button */}
+            <button
+              onClick={onRefresh}
+              className="p-2 bg-[#21262d] hover:bg-[#30363d] text-slate-300 hover:text-white rounded-lg border border-[#30363d] transition-all hover:rotate-180 duration-300"
+              title="Recargar archivos de la SD"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={onOpenDriveModal}
+            className="flex items-center space-x-1.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            <span>Conectar SD</span>
+          </button>
+        )}
       </div>
     </header>
   );

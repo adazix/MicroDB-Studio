@@ -1,53 +1,85 @@
 # 🗄️ MicroDB Studio
 
-**MicroDB Studio** es una suite de software de escritorio moderna, visual y de alto rendimiento desarrollada por **Adazix Systems S.A.S** para explorar, monitorear en tiempo real, editar, depurar y exportar bases de datos binarias creadas con la librería **MicroDB** en tarjetas SD (Arduino, ESP32, STM32, RP2040) o discos locales, con integración directa y compatibilidad con **DBeaver**.
+<div align="center">
+  <img src="public/banner.jpg" alt="MicroDB Studio Banner" width="100%" />
+
+  <br />
+
+  [![Electron](https://img.shields.io/badge/Electron-44.4-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
+  [![React](https://img.shields.io/badge/React-18.3-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+  [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+
+  <p align="center">
+    <strong>Suite de escritorio visual, moderna y de alto rendimiento para gestionar, monitorear y consultar bases de datos binarias embebidas en tarjetas SD (Arduino / ESP32 / STM32 / RP2040) con MicroDB y compatibilidad con DBeaver.</strong>
+  </p>
+</div>
 
 ---
 
-## 🚀 Inicio Rápido
+## 🚀 Inicio Rápido & Distribución
 
-### Opción 1: Con doble clic en Windows
-Simplemente ejecuta el archivo:
-```bat
-start.bat
-```
+### 🖥️ 1. Ejecutables para Windows (Releases)
 
-### Opción 2: Desde terminal
+MicroDB Studio se distribuye como aplicación nativa de escritorio para Windows:
+- **Instalador NSIS:** `MicroDB Studio Setup 1.0.0.exe` (crea accesos directos y asistente de instalación).
+- **Versión Portable:** `MicroDB Studio 1.0.0.exe` (ejecutable autónomo *single-file*, no requiere instalación ni permisos de administrador).
+
+### 🛠️ 2. Ejecutar desde Código Fuente (Desarrollo)
+
 ```bash
-# 1. Instalar dependencias (solo la primera vez)
+# 1. Clonar el repositorio
+git clone https://github.com/tu-usuario/MicroDB-Studio.git
+cd MicroDB-Studio
+
+# 2. Instalar dependencias
+pnpm install
+# o con npm:
 npm install
 
-# 2. Iniciar servidor y frontend en modo desarrollo
-npm run dev
+# 3. Iniciar en modo desarrollo (Desktop Electron + Vite)
+pnpm desktop:dev
+
+# O iniciar como aplicación web local
+pnpm dev
 ```
 
-La aplicación abrirá la interfaz en tu navegador en:
-👉 **[http://localhost:5173](http://localhost:5173)** (o `http://localhost:3001` en producción).
+### 📦 3. Compilar los Ejecutables de Windows
+
+```bash
+# Compilar frontend, backend y empaquetar instalador + portable en dist-electron/
+pnpm dist:win
+
+# Generar únicamente la versión portable
+pnpm dist:portable
+```
 
 ---
 
 ## ✨ Características Principales
 
-### 1. 🖴 Soporte Híbrido: Tarjetas SD y Carpetas Locales
-- **Detección Automática de Unidades**: Detecta tarjetas SD / unidades extraíbles conectadas a Windows (ej: `E:\`, `F:\`) y localiza carpetas `DB`.
-- **Ruta Local de PC**: Puedes ingresar cualquier carpeta de tu disco local (ej. `D:\Datos\DB` o `C:\Arduino\MicroDB\sample_db`).
-- **Live SD Watcher (Tiempo Real)**: Mediante WebSockets y monitorización de disco a bajo nivel, si tu microcontrolador Arduino/ESP32 escribe nuevos registros en la SD, la interfaz se actualiza instantáneamente con animaciones de pulso.
+### 1. 🖴 Soporte Multibase de Datos y Tarjetas SD
+- **Detección Automática de Unidades**: Detecta tarjetas SD y unidades extraíbles conectadas a Windows (ej: `E:\`, `F:\`) y lista automáticamente todas las bases de datos válidas encontradas.
+- **Selector y Creador de Bases de Datos**: Permite alternar entre diferentes bases de datos al instante, crear nuevas carpetas de BD con nombres compatibles FAT 8.3 y cerrar/desconectar ubicaciones limpiamente.
+- **Live SD Watcher (Tiempo Real)**: Mediante WebSockets y monitorización de disco, si tu microcontrolador Arduino/ESP32 escribe nuevos registros en la SD, la interfaz se actualiza instantáneamente con animaciones de pulso.
 
 ### 2. ⚡ Consola SQL Interactiva y Relacional
-- Ejecuta consultas SQL estándar completas (`SELECT`, `WHERE`, `INNER JOIN`, `GROUP BY`, `ORDER BY`, `COUNT`, `AVG`, `SUM`, `MAX`, `MIN`).
+- Motor SQL integrado para ejecutar consultas completas: `SELECT`, `WHERE`, `INNER JOIN`, `GROUP BY`, `ORDER BY`, funciones de agregación (`COUNT`, `AVG`, `SUM`, `MAX`, `MIN`).
 - Muestra el tiempo de ejecución en milisegundos (`ms`).
 - Exporta los resultados de cualquier consulta a CSV, Excel o copia a JSON con un clic.
 
 ### 3. 🔌 Puente Directo con DBeaver (SQLite Live Bridge)
-- MicroDB Studio mantiene sincronizado automáticamente un archivo SQLite estructurado (`microdb_live.sqlite`) con tipos de datos nativos SQL y claves primarias.
+- MicroDB Studio mantiene sincronizado automáticamente un archivo SQLite estructurado (`microdb_live.sqlite`) con tipos de datos nativos SQL, claves primarias y foráneas.
 - **Cómo conectar en DBeaver**:
   1. En DBeaver, haz clic en **Nueva Conexión ➔ SQLite**.
   2. Pega la ruta del archivo copiada desde el modal de MicroDB Studio (`.../microdb_live.sqlite`).
   3. Haz clic en **Finalizar**. ¡Listo! Puedes ver diagramas de entidad-relación (ERD), diseñar consultas visuales y graficar datos.
 
-### 4. 🧬 Importador Automático de Structs C++
-- Pega directamente la definición del `struct` de tu sketch Arduino (ej: `struct SensorData { ... }`).
-- El analizador sintáctico extrae automáticamente tipos (`bool`, `uint8_t`, `int16_t`, `float`, `double`, `char[]`, `uint8_t[]` BLOBs, JSON, rutas multimedia), calcula tamaños exactos en bytes y verifica la coincidencia con la cabecera `.tbl`.
+### 4. 🧬 Esquemas Arduino JSON & Claves Foráneas
+- Compatible con el formato de metadatos `.jsn` generado por la librería Arduino de MicroDB.
+- **Navegación Relacional**: Detecta claves foráneas (`references`) y permite saltar directamente al registro correspondiente de la tabla relacionada con un clic.
+- **Tipos de datos soportados**: `BOOL`, `INT8`, `INT16`, `INT32`, `UINT8`, `UINT16`, `UINT32`, `FLOAT`, `STRING`, `BLOB`.
 
 ### 5. 📊 Data Grid & Operaciones CRUD en Disco
 - Visualiza todos los slots físicos en disco: registros **Activos** y registros **Borrados (Tombstones)**.
@@ -57,7 +89,7 @@ La aplicación abrirá la interfaz en tu navegador en:
 - **Visor Hexadecimal (HEX)**: Inspecciona los bytes crudos y la representación ASCII de cada slot.
 
 ### 6. 🩺 Mapa Físico de Sectores & Desfragmentador (Vacuum)
-- Visualización gráfica estilo desfragmentador de disco de todos los bloques de la SD.
+- Visualización gráfica de todos los bloques de la SD.
 - Identifica la fragmentación del archivo `.tbl`.
 - Herramienta **Vacuum / Compactar**: Elimina permanentemente los tombstones, compacta el archivo contiguamente y reconstruye los índices secundarios `.idx`.
 
@@ -73,57 +105,32 @@ La aplicación abrirá la interfaz en tu navegador en:
 
 ```
 MicroDB-Studio/
-├── package.json               # Configuración de dependencias y scripts
-├── tsconfig.json              # Configuración de TypeScript
-├── vite.config.ts             # Bundler Vite con proxy hacia backend
-├── tailwind.config.js         # Estilos Tailwind CSS Dark Theme
-├── start.bat                  # Script de inicio rápido con doble clic
+├── dist-electron/             # Salida de instaladores y ejecutables de Windows
+├── electron/                  # Proceso principal de Electron (Runtime Desktop)
+│   └── main.cjs
+├── public/                    # Recursos estáticos (íconos, banners, favicon)
+│   ├── icon.png
+│   ├── favicon.png
+│   └── banner.jpg
 ├── sample_db/                 # Base de datos de ejemplo con tablas de prueba
-│   ├── alldata.tbl            # Tabla con todos los tipos de datos de MicroDB
-│   ├── alldata.schema.json
-│   ├── custs.tbl              # Tabla relacional de Clientes
-│   ├── custs.schema.json
-│   ├── invs.tbl               # Tabla relacional de Facturas
-│   └── invs.schema.json
-├── server/                    # Backend Node.js & Motor Binario
+├── server/                    # Backend Node.js & Motor Binario MicroDB
 │   ├── index.ts               # Servidor API REST + WebSockets
-│   ├── seedSampleDb.ts        # Generador de tablas binarias de prueba
-│   ├── core/
-│   │   ├── binaryEngine.ts    # Motor binario MTB1 y MID1 (100% MicroDB C++)
-│   │   ├── microdbTypes.ts    # Tipos, headers y constantes
-│   │   ├── schemaParser.ts    # C++ Struct Parser & AST
-│   │   ├── sqliteBridge.ts    # Puente SQLite en tiempo real para DBeaver
-│   │   ├── exporter.ts        # Exportador a CSV, XLSX, JSON, SQL Dump
-│   │   ├── defrag.ts          # Compactador / Vacuum de tablas
-│   │   └── fnv1a.ts           # Hash FNV-1a para índices secundarios
-│   └── services/
-│       ├── diskDetector.ts    # Detector de unidades SD y discos
-│       └── sdWatcher.ts       # Observador de archivos en tiempo real
-└── src/                       # Frontend React + TypeScript
-    ├── main.tsx               # Punto de entrada React
-    ├── App.tsx                # Aplicación principal y gestión de estado
-    ├── index.css              # Estilos globales y animaciones de registros
-    ├── types/                 # Interfaces TypeScript
-    ├── utils/                 # Cliente API REST y WebSockets
-    └── components/            # Componentes de la interfaz
-        ├── Navbar.tsx
-        ├── TableExplorer.tsx
-        ├── DataGridView.tsx
-        ├── SqlConsole.tsx
-        ├── SchemaEditor.tsx
-        ├── DiskBlockMap.tsx
-        ├── DriveSelectorModal.tsx
-        ├── DBeaverBridgeModal.tsx
-        ├── ExportModal.tsx
-        ├── RecordEditModal.tsx
-        ├── HexInspectorModal.tsx
-        ├── DefragModal.tsx
-        └── NewTableModal.tsx
+│   ├── core/                  # Motores binarios, parser de esquemas y SQLite Bridge
+│   └── services/              # Detector de unidades y monitor SD en tiempo real
+├── src/                       # Frontend React + TypeScript (Tailwind CSS)
+│   ├── components/            # Componentes UI (Navbar, DataGridView, Modales, etc.)
+│   ├── types/                 # Definiciones de tipos TypeScript
+│   └── utils/                 # Cliente API REST y WebSockets
+├── LICENSE                    # Licencia MIT
+├── package.json               # Dependencias y scripts de empaquetado
+├── tsconfig.json              # Configuración TypeScript
+└── vite.config.ts             # Configuración de Vite
 ```
 
 ---
 
-## 📜 Licencia y Créditos
-- **Desarrollado para:** MicroDB Embedded Database
-- **Ubicación del Proyecto:** `D:\Emprendimiento\Adazix Systems S.A.S\Desarrollos\MicroDB-Studio`
-- **Autor:** Adazix Systems S.A.S / Jairo Antonio Rohatan Zapata
+## 📄 Licencia
+
+Este proyecto está bajo la Licencia **MIT**. Consulta el archivo [LICENSE](LICENSE) para más detalles.
+
+Copyright (c) 2026 **Jairo Antonio Rohatan Zapata & Adazix Systems S.A.S**
