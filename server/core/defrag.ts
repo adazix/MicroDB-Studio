@@ -5,9 +5,8 @@
 // ============================================================================
 
 import fs from 'node:fs';
-import path from 'node:path';
 import { MicroDBEngine } from './binaryEngine.js';
-import { TableSchema, RecordStatus, MICRODB_NULL_OFFSET } from './microdbTypes.js';
+import { TableSchema, RecordStatus, MICRODB_NULL_OFFSET, SLOT_HEADER_SIZE } from './microdbTypes.js';
 
 export class TableDefragmenter {
   /**
@@ -28,21 +27,21 @@ export class TableDefragmenter {
     newHeader.nextAutoId = header.nextAutoId;
 
     const fd = fs.openSync(tempFilePath, 'r+');
-    const slotTotalSize = 9 + header.recordSize;
+    const slotTotalSize = SLOT_HEADER_SIZE + header.recordSize;
 
     for (let i = 0; i < activeRecords.length; i++) {
       const rec = activeRecords[i];
       const slotOffset = newHeader.dataStartOffset + (i * slotTotalSize);
 
-      const slotHeaderBuf = Buffer.alloc(9);
+      const slotHeaderBuf = Buffer.alloc(SLOT_HEADER_SIZE);
       slotHeaderBuf.writeUInt8(RecordStatus.RECORD_ACTIVE, 0);
       slotHeaderBuf.writeUInt32LE(rec._recordId, 1);
       slotHeaderBuf.writeUInt32LE(MICRODB_NULL_OFFSET, 5);
 
       const payloadBuf = MicroDBEngine.encodePayload(rec, schema);
 
-      fs.writeSync(fd, slotHeaderBuf, 0, 9, slotOffset);
-      fs.writeSync(fd, payloadBuf, 0, header.recordSize, slotOffset + 9);
+      fs.writeSync(fd, slotHeaderBuf, 0, SLOT_HEADER_SIZE, slotOffset);
+      fs.writeSync(fd, payloadBuf, 0, header.recordSize, slotOffset + SLOT_HEADER_SIZE);
     }
 
     newHeader.totalSlots = activeRecords.length;

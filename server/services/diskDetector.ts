@@ -28,6 +28,27 @@ export interface DetectedDrive {
   freeSpaceGb?: number;
 }
 
+export function isSystemOrIgnoredDir(name: string): boolean {
+  if (!name) return true;
+  const lower = name.toLowerCase().trim();
+  if (name.startsWith('.') || name.startsWith('$')) return true;
+  if (
+    lower === 'system volume information' ||
+    lower.includes('system volume information') ||
+    lower === '$recycle.bin' ||
+    lower.includes('recycle.bin') ||
+    lower === 'recycler' ||
+    lower === 'lost+found' ||
+    lower === 'node_modules' ||
+    lower === '__macosx' ||
+    lower === 'recovery' ||
+    lower.startsWith('found.')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export class DiskDetector {
   /**
    * Obtiene la lista de unidades del sistema e identifica tarjetas SD y bases de datos MicroDB
@@ -136,12 +157,7 @@ export class DiskDetector {
 
       // 2. Escanear subcarpetas
       for (const entry of entries) {
-        if (
-          entry.isDirectory() &&
-          !entry.name.startsWith('.') &&
-          !entry.name.includes('System Volume Information') &&
-          !entry.name.startsWith('$')
-        ) {
+        if (entry.isDirectory() && !isSystemOrIgnoredDir(entry.name)) {
           const subPath = path.join(drivePath, entry.name);
           try {
             const subFiles = fs.readdirSync(subPath);

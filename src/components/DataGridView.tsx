@@ -41,29 +41,11 @@ interface DataGridViewProps {
   onDropTableClick?: () => void;
 }
 
-// Helper para determinar si un campo es Clave Foránea / Relación y resolver tabla destino
+// Criterio estricto: Sólo es Clave Foránea si está explícitamente definida en el esquema (isForeignKey + referencesTable)
 function isFieldForeignKey(field: FieldSchema, allTableNames: string[] = []): { isFk: boolean; targetTable?: string } {
   if (field.isForeignKey && field.referencesTable) {
     const match = allTableNames.find((t) => t.toLowerCase() === field.referencesTable!.toLowerCase());
     return { isFk: true, targetTable: match || field.referencesTable };
-  }
-  if (field.isForeignKey) {
-    const base = field.name.replace(/_?id$/i, '');
-    const match = allTableNames.find((t) => t.toLowerCase() === base.toLowerCase() || t.toLowerCase() === `${base}s`.toLowerCase());
-    return { isFk: true, targetTable: match || base };
-  }
-  const match = field.name.match(/^(?:id_([A-Za-z0-9_]+)|([A-Za-z0-9]+?)_?id)$/i);
-  if (match) {
-    const entity = match[1] || match[2];
-    if (entity && !['record', 'slot', 'auto', 'unique'].includes(entity.toLowerCase())) {
-      const tableMatch = allTableNames.find(
-        (t) =>
-          t.toLowerCase() === entity.toLowerCase() ||
-          t.toLowerCase() === `${entity}s`.toLowerCase() ||
-          t.toLowerCase() === `${entity}es`.toLowerCase()
-      );
-      return { isFk: true, targetTable: tableMatch || entity };
-    }
   }
   return { isFk: false };
 }
@@ -88,19 +70,26 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
   const [sortField, setSortField] = useState<string>('_recordId');
   const [sortAsc, setSortAsc] = useState<boolean>(true);
   const [page, setPage] = useState(1);
+  const [onlyShowRelatedId, setOnlyShowRelatedId] = useState<boolean>(true);
   const pageSize = 25;
 
-  // Si venimos navegando desde una relación, enfocar o pre-buscar ese ID
+  // Resetear filtros y búsqueda al cambiar de tabla
   useEffect(() => {
-    if (navigationContext?.targetRecordId !== undefined) {
-      setSearch(String(navigationContext.targetRecordId));
-    }
-  }, [navigationContext]);
+    setSearch('');
+    setPage(1);
+    setStatusFilter('all');
+    setOnlyShowRelatedId(true);
+  }, [tableName]);
 
   // Filter & Sort
   const filteredRecords = useMemo(() => {
     return records
       .filter((r) => {
+        // Filtro específico de navegación de relación (si está activo y no se ha cancelado)
+        if (navigationContext?.targetRecordId !== undefined && onlyShowRelatedId) {
+          if (r._recordId !== navigationContext.targetRecordId) return false;
+        }
+
         // Status filter
         if (statusFilter === 'active' && r._status !== 1) return false;
         if (statusFilter === 'deleted' && r._status !== 0) return false;
@@ -108,7 +97,7 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
         // Search text
         if (!search.trim()) return true;
         const q = search.toLowerCase();
-        return Object.entries(r).some(([k, val]) => {
+        return Object.values(r).some((val) => {
           if (val === null || val === undefined) return false;
           return String(val).toLowerCase().includes(q);
         });
@@ -126,7 +115,7 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
           ? String(valA).localeCompare(String(valB))
           : String(valB).localeCompare(String(valA));
       });
-  }, [records, statusFilter, search, sortField, sortAsc]);
+  }, [records, statusFilter, search, sortField, sortAsc, navigationContext, onlyShowRelatedId]);
 
   const totalPages = Math.ceil(filteredRecords.length / pageSize) || 1;
   const paginatedRecords = filteredRecords.slice((page - 1) * pageSize, page * pageSize);
@@ -144,7 +133,7 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
     <div className="flex-1 flex flex-col h-full bg-[#0d1117] overflow-hidden">
       {/* Relation Back Navigation Banner */}
       {navigationContext && onReturnFromRelation && (
-        <div className="bg-sky-950/40 border-b border-sky-500/30 px-5 py-2.5 flex items-center justify-between text-xs select-none">
+        <div className="bg-sky-950/40 border-b border-sky-500/30 px-5 py-2.5 flex items-center justify-between text-xs select-none animate-in fade-in duration-200">
           <div className="flex items-center space-x-3">
             <button
               onClick={onReturnFromRelation}
@@ -157,12 +146,24 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
               Consultando relación foránea desde <strong className="text-white font-mono">{navigationContext.fromTable}.{navigationContext.fieldName}</strong> (ID #{navigationContext.targetRecordId})
             </span>
           </div>
-          <button
-            onClick={() => setSearch('')}
-            className="text-slate-400 hover:text-white underline text-[11px]"
-          >
-            Mostrar todos los registros de {tableName}
-          </button>
+
+          <div className="flex items-center space-x-3">
+            {onlyShowRelatedId ? (
+              <button
+                onClick={() => setOnlyShowRelatedId(false)}
+                className="text-sky-400 hover:text-sky-300 underline text-[11px] font-semibold"
+              >
+                Ver todas las filas de {tableName}
+              </button>
+            ) : (
+              <button
+                onClick={() => setOnlyShowRelatedId(true)}
+                className="text-sky-400 hover:text-sky-300 underline text-[11px] font-semibold"
+              >
+                Filtrar solo ID #{navigationContext.targetRecordId}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -202,25 +203,22 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
           <div className="flex items-center bg-[#0d1117] rounded-lg p-1 border border-[#30363d] text-xs">
             <button
               onClick={() => setStatusFilter('all')}
-              className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
-                statusFilter === 'all' ? 'bg-sky-500 text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`px-2.5 py-1 rounded-md font-semibold transition-all ${statusFilter === 'all' ? 'bg-sky-500 text-white' : 'text-slate-400 hover:text-white'
+                }`}
             >
               Todos ({records.length})
             </button>
             <button
               onClick={() => setStatusFilter('active')}
-              className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
-                statusFilter === 'active' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`px-2.5 py-1 rounded-md font-semibold transition-all ${statusFilter === 'active' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-white'
+                }`}
             >
               Activos ({header.activeRecords})
             </button>
             <button
               onClick={() => setStatusFilter('deleted')}
-              className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
-                statusFilter === 'deleted' ? 'bg-rose-500 text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`px-2.5 py-1 rounded-md font-semibold transition-all ${statusFilter === 'deleted' ? 'bg-rose-500 text-white' : 'text-slate-400 hover:text-white'
+                }`}
             >
               Borrados ({header.deletedRecords})
             </button>
@@ -345,25 +343,23 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
                 return (
                   <tr
                     key={rec._slotIndex}
-                    className={`group transition-colors ${
-                      isTargetHighlighted
+                    className={`group transition-colors ${isTargetHighlighted
                         ? 'bg-sky-500/15 border border-sky-500/40 text-white font-medium shadow-sm'
                         : rec._isNew
-                        ? 'animate-new-record'
-                        : isActive
-                        ? 'hover:bg-[#161b22]/80 bg-[#0d1117]'
-                        : 'bg-rose-950/15 hover:bg-rose-950/25 text-slate-400 opacity-75'
-                    }`}
+                          ? 'animate-new-record'
+                          : isActive
+                            ? 'hover:bg-[#161b22]/80 bg-[#0d1117]'
+                            : 'bg-rose-950/15 hover:bg-rose-950/25 text-slate-400 opacity-75'
+                      }`}
                   >
                     {/* Slot Index + Status Dot Indicator */}
                     <td className="p-3 font-mono text-center">
                       <div className="flex items-center justify-center space-x-1.5">
                         <span
-                          className={`w-2 h-2 rounded-full shrink-0 ${
-                            isActive
+                          className={`w-2 h-2 rounded-full shrink-0 ${isActive
                               ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50'
                               : 'bg-rose-400 shadow-sm shadow-rose-400/50'
-                          }`}
+                            }`}
                           title={isActive ? 'Slot Físico Activo (0x01)' : 'Slot Físico Marcado como Borrado (Tombstone 0x00) en Free-List'}
                         />
                         <span className="text-slate-400">{rec._slotIndex}</span>
@@ -414,11 +410,10 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
                             </button>
                           ) : field.type === 'bool' ? (
                             <span
-                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center space-x-1 ${
-                                val
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center space-x-1 ${val
                                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                                   : 'bg-slate-800 text-slate-400 border border-slate-700'
-                              }`}
+                                }`}
                             >
                               <span className={`w-1.5 h-1.5 rounded-full ${val ? 'bg-emerald-400' : 'bg-slate-500'}`} />
                               <span>{val ? 'TRUE' : 'FALSE'}</span>

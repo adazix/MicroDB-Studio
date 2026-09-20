@@ -5,9 +5,7 @@
 import React, { useState } from 'react';
 import {
   X,
-  Sparkles,
   Zap,
-  Trash2,
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';

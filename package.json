@@ -5,13 +5,14 @@
   "description": "MicroDB Studio - Software de escritorio y visor/gestor visual de bases de datos para tarjetas SD con MicroDB y compatibilidad con DBeaver",
   "author": "Jairo Antonio Rohatan Zapata & Adazix Systems S.A.S",
   "main": "server/index.ts",
+  "packageManager": "pnpm@11.1.2",
   "scripts": {
     "dev:server": "tsx watch server/index.ts",
     "dev:client": "vite",
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev": "concurrently \"pnpm dev:server\" \"pnpm dev:client\"",
     "build:client": "vite build",
     "build:server": "tsc -p server/tsconfig.json",
-    "build": "npm run build:client && npm run build:server",
+    "build": "pnpm build:client && pnpm build:server",
     "start": "tsx server/index.ts"
   },
   "dependencies": {

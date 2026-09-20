@@ -4,8 +4,6 @@
 // ============================================================================
 
 import * as XLSX from 'xlsx';
-import fs from 'node:fs';
-import path from 'node:path';
 import { TableSchema, DecodedRecord } from './microdbTypes.js';
 
 export class Exporter {

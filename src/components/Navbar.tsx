@@ -26,7 +26,6 @@ interface NavbarProps {
   onOpenNewTableModal: () => void;
   onRefresh: () => void;
   isWatching: boolean;
-  selectedTable: string | null;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -39,8 +38,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenExportModal,
   onOpenNewTableModal,
   onRefresh,
-  isWatching,
-  selectedTable
+  isWatching
 }) => {
   return (
     <header className="h-16 bg-[#161b22] border-b border-[#30363d] px-5 flex items-center justify-between z-30 select-none">

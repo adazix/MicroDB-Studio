@@ -8,7 +8,8 @@ import {
   TableSchema,
   DecodedRecord,
   TableHeaderData,
-  SqlQueryResult
+  SqlQueryResult,
+  DatabaseInfo
 } from '../types/microdb.js';
 
 const API_BASE = '/api';

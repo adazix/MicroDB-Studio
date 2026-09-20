@@ -11,8 +11,6 @@ import {
   Download,
   Terminal,
   Clock,
-  Database,
-  Sparkles,
   AlertCircle,
   FileSpreadsheet
 } from 'lucide-react';

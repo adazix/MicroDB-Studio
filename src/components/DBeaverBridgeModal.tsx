@@ -8,12 +8,7 @@ import {
   Share2,
   Copy,
   Check,
-  CheckCircle2,
-  ExternalLink,
-  Database,
-  ArrowRight,
-  ShieldCheck,
-  Sparkles
+  CheckCircle2
 } from 'lucide-react';
 
 interface DBeaverBridgeModalProps {

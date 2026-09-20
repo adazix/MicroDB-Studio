@@ -3,7 +3,6 @@ import {
   X,
   PlusCircle,
   Code2,
-  CheckCircle2,
   AlertCircle,
   Layers,
   Plus,

@@ -9,9 +9,7 @@ import {
   FileSpreadsheet,
   FileCode,
   FileText,
-  Database,
-  CheckCircle2,
-  Sparkles
+  Database
 } from 'lucide-react';
 import { exportData } from '../utils/api.js';
 import { TableSummary } from '../types/microdb.js';

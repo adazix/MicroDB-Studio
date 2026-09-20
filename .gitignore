@@ -1,3 +1,4 @@
 node_modules
 dist*
 sample_db
+.pnpm-debug.log*

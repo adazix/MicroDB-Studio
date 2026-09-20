@@ -3,7 +3,7 @@
 // ============================================================================
 
 import React, { useState } from 'react';
-import { Database, X, FolderPlus, Sparkles, Check, AlertCircle } from 'lucide-react';
+import { X, FolderPlus, Sparkles, AlertCircle } from 'lucide-react';
 import { useToast } from './Toast.js';
 
 interface NewDatabaseModalProps {
@@ -19,7 +19,7 @@ export const NewDatabaseModal: React.FC<NewDatabaseModalProps> = ({
   onDatabaseCreated,
   existingDatabases
 }) => {
-  const { showError, showSuccess } = useToast();
+  const { showError } = useToast();
   const [dbName, setDbName] = useState('');
   const [loading, setLoading] = useState(false);
 

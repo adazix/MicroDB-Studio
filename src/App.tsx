@@ -36,7 +36,7 @@ import {
   deleteDatabase
 } from './utils/api.js';
 
-import { HardDrive, FolderOpen, Database, Layers } from 'lucide-react';
+import { FolderOpen, Database, Layers } from 'lucide-react';
 import { useToast } from './components/Toast.js';
 
 export const App: React.FC = () => {
@@ -61,7 +61,6 @@ export const App: React.FC = () => {
   // Navigation context for Foreign Keys (ir y volver de relaciones)
   const [relationContext, setRelationContext] = useState<RelationNavigationContext | null>(null);
 
-  const [loading, setLoading] = useState(false);
   const [isWatching, setIsWatching] = useState(false);
 
   // Modals
@@ -114,7 +113,6 @@ export const App: React.FC = () => {
   // Cargar detalle de la tabla seleccionada
   const loadTableDetail = useCallback(async (tableName: string) => {
     if (!tableName) return;
-    setLoading(true);
     try {
       const data = await fetchTableDetail(tableName);
       setSelectedTableDetail({
@@ -124,8 +122,6 @@ export const App: React.FC = () => {
       });
     } catch (err) {
       console.error(`Error loading table ${tableName}:`, err);
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -186,7 +182,8 @@ export const App: React.FC = () => {
       setActiveDatabase(dbName);
       await loadDatabases();
       await loadTables();
-      showSuccess('Base de Datos Activa', `Cambiado a: ${dbName === '/' ? 'Raíz (/)' : `/${dbName}`}`);
+      const databasePath = dbName === '/' ? 'Raíz (/)' : `/${dbName}`;
+      showSuccess('Base de Datos Activa', `Cambiado a: ${databasePath}`);
     } catch (err: any) {
       showError('Error al cambiar de base de datos', err.message);
     }
@@ -256,7 +253,9 @@ export const App: React.FC = () => {
               loadTableDetail(selectedTableName);
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn('[WebSocket] Mensaje inválido recibido:', e);
+        }
       };
       ws.onclose = () => setIsWatching(false);
       ws.onerror = () => setIsWatching(false);
@@ -333,7 +332,6 @@ export const App: React.FC = () => {
           if (selectedTableName) loadTableDetail(selectedTableName);
         }}
         isWatching={isWatching}
-        selectedTable={selectedTableName}
       />
 
       {/* Main Workspace */}

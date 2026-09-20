@@ -13,7 +13,6 @@ import {
   Folder,
   ArrowRight,
   Database,
-  Layers,
   ChevronRight
 } from 'lucide-react';
 import { DetectedDrive } from '../types/microdb.js';

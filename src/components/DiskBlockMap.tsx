@@ -8,14 +8,9 @@ import {
   Radio,
   CheckCircle2,
   Trash2,
-  HardDrive,
-  Cpu,
-  Layers,
-  ArrowRight,
-  Sparkles,
-  Info
+  Layers
 } from 'lucide-react';
-import { TableSummary, DecodedRecord, TableHeaderData } from '../types/microdb.js';
+import { TableSummary, DecodedRecord } from '../types/microdb.js';
 
 interface DiskBlockMapProps {
   table: TableSummary;

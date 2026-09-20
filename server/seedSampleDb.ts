@@ -7,7 +7,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { MicroDBEngine } from './core/binaryEngine.js';
 import { SchemaParser } from './core/schemaParser.js';
-import { TableSchema } from './core/microdbTypes.js';
 
 const SAMPLE_DIR = path.join(process.cwd(), 'sample_db');
 if (!fs.existsSync(SAMPLE_DIR)) {

@@ -13,7 +13,6 @@ import {
   Database,
   ChevronDown,
   Plus,
-  FolderOpen,
   FolderPlus
 } from 'lucide-react';
 import { TableSummary, DatabaseInfo } from '../types/microdb.js';

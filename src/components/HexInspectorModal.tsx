@@ -3,7 +3,7 @@
 // ============================================================================
 
 import React from 'react';
-import { X, Eye, FileCode, CheckCircle2 } from 'lucide-react';
+import { X, Eye } from 'lucide-react';
 import { DecodedRecord } from '../types/microdb.js';
 
 interface HexInspectorModalProps {

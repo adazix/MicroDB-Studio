@@ -15,16 +15,12 @@ import {
   INDEX_ENTRY_SIZE,
   RecordStatus,
   TableHeaderData,
-  SlotHeaderData,
   IndexHeaderData,
   IndexEntryData,
   TableSchema,
-  FieldSchema,
-  DecodedRecord,
-  TableSummary
+  DecodedRecord
 } from './microdbTypes.js';
 import { SchemaParser } from './schemaParser.js';
-import { fnv1a32 } from './fnv1a.js';
 
 export class MicroDBEngine {
   /**

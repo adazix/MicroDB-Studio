@@ -14,7 +14,7 @@ import { SchemaParser } from './core/schemaParser.js';
 import { SQLiteBridge } from './core/sqliteBridge.js';
 import { Exporter } from './core/exporter.js';
 import { TableDefragmenter } from './core/defrag.js';
-import { DiskDetector } from './services/diskDetector.js';
+import { DiskDetector, isSystemOrIgnoredDir } from './services/diskDetector.js';
 import { SDWatcherService } from './services/sdWatcher.js';
 import { TableSchema, TableSummary } from './core/microdbTypes.js';
 
@@ -62,7 +62,7 @@ function scanDatabases(rootDir: string): DatabaseItem[] {
 
     // 2. Escanear subdirectorios como bases de datos (ej: DB, STORE, SENSORS)
     for (const entry of entries) {
-      if (entry.isDirectory() && !entry.name.startsWith('.')) {
+      if (entry.isDirectory() && !isSystemOrIgnoredDir(entry.name)) {
         const subPath = path.join(rootDir, entry.name);
         try {
           const subFiles = fs.readdirSync(subPath);
@@ -118,7 +118,7 @@ function getTableFileInfo(dirPath: string | null, tableNameParam: string): { tab
 }
 
 // Cuando cambia una tabla en disco, resincronizar SQLite automáticamente
-sdWatcher.setOnTableChanged(async (tableName, eventType) => {
+sdWatcher.setOnTableChanged(async (_tableName, _eventType) => {
   if (currentDbDirectory) {
     try {
       await SQLiteBridge.syncFolderToSqlite(currentDbDirectory, schemas);
@@ -484,7 +484,9 @@ app.delete('/api/database/:name', async (req, res) => {
   try {
     const dbName = req.params.name;
     if (!rootDirectory) return res.status(400).json({ success: false, error: 'No hay unidad abierta' });
-    if (dbName === 'Principal (Raíz)') return res.status(400).json({ success: false, error: 'No se puede eliminar el directorio raíz' });
+    if (dbName === 'Principal (Raíz)' || isSystemOrIgnoredDir(dbName)) {
+      return res.status(400).json({ success: false, error: 'No se puede eliminar una carpeta de sistema o el directorio raíz' });
+    }
 
     const targetDir = path.join(rootDirectory, dbName);
     if (fs.existsSync(targetDir)) {
@@ -1036,7 +1038,7 @@ app.get('/api/index/:name', (req, res) => {
 const clientDist = path.join(process.cwd(), 'dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
-  app.get('*', (req, res) => {
+  app.get('*', (_req, res) => {
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
