@@ -33,7 +33,8 @@ import {
   fetchDatabases,
   selectDatabase,
   createDatabase,
-  deleteDatabase
+  deleteDatabase,
+  closeDirectory
 } from './utils/api.js';
 
 import { FolderOpen, Database, Layers } from 'lucide-react';
@@ -230,6 +231,31 @@ export const App: React.FC = () => {
     });
   };
 
+  // Handler para cerrar el directorio actual y volver al inicio
+  const handleCloseDirectory = async () => {
+    showConfirm({
+      title: '¿Cerrar Directorio Actual?',
+      message: 'Se desconectará la tarjeta SD o carpeta activa. Podrás seleccionar otra ubicación o crear una nueva base de datos.',
+      confirmText: 'Cerrar Ubicación',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        try {
+          await closeDirectory();
+        } catch (err) {
+          console.warn('Error cerrando directorio:', err);
+        }
+        setCurrentDirectory(null);
+        setTables([]);
+        setDatabases([]);
+        setSelectedTableName(null);
+        setSelectedTableDetail(null);
+        setRelationContext(null);
+        setActiveTab('tables');
+        showInfo('Directorio Cerrado', 'Ubicación desconectada. Selecciona una nueva tarjeta SD o carpeta.');
+      }
+    });
+  };
+
   // WebSocket para Live SD Watcher
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -323,6 +349,7 @@ export const App: React.FC = () => {
         currentDirectory={currentDirectory}
         activeDatabase={activeDatabase}
         onOpenDriveModal={() => setDriveModalOpen(true)}
+        onCloseDirectory={handleCloseDirectory}
         onOpenDBeaverModal={() => setDbeaverModalOpen(true)}
         onOpenExportModal={() => setExportModalOpen(true)}
         onOpenNewTableModal={() => setNewTableModalOpen(true)}
@@ -337,25 +364,59 @@ export const App: React.FC = () => {
       {/* Main Workspace */}
       <div className="flex-1 flex overflow-hidden">
         {/* If no directory is opened yet */}
+        {/* If no directory is opened yet */}
         {!currentDirectory && tables.length === 0 && databases.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-6 select-none">
-            <div className="w-20 h-20 rounded-3xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center shadow-2xl shadow-sky-500/10 animate-bounce duration-1000">
-              <Database className="w-10 h-10" />
+          <div className="flex-1 relative flex items-center justify-center p-6 select-none overflow-hidden bg-dark-950">
+            {/* Background Presentation Banner */}
+            <div 
+              className="absolute inset-0 bg-cover bg-center opacity-30 blur-[2px] scale-105 pointer-events-none transition-all duration-700"
+              style={{ backgroundImage: `url('/banner.jpg')` }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/70 to-dark-950/40 pointer-events-none" />
+
+            {/* Welcome Glass Card */}
+            <div className="relative z-10 max-w-xl w-full bg-slate-900/80 border border-slate-700/60 rounded-3xl p-8 sm:p-10 shadow-2xl shadow-sky-500/10 backdrop-blur-xl text-center space-y-6 animate-fadeIn">
+              <div className="flex justify-center">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-sky-500/20 to-purple-500/20 border border-sky-400/30 p-2 shadow-lg shadow-sky-500/20 flex items-center justify-center">
+                  <img src="/favicon.png" alt="MicroDB Studio" className="w-full h-full object-contain filter drop-shadow-[0_0_12px_rgba(56,189,248,0.5)]" />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-sky-300 tracking-tight">
+                  Bienvenido a MicroDB Studio
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-md mx-auto">
+                  Suite visual y gestor de bases de datos embebidas para tarjetas SD, MicroDB y proyectos de microcontroladores Arduino / ESP32.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                <button
+                  onClick={() => setDriveModalOpen(true)}
+                  className="w-full sm:w-auto bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs px-6 py-3.5 rounded-xl transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center space-x-2 active:scale-95 group"
+                >
+                  <FolderOpen className="w-4 h-4 text-sky-200 group-hover:scale-110 transition-transform" />
+                  <span>Abrir Tarjeta SD o Carpeta</span>
+                </button>
+
+                <button
+                  onClick={() => setNewDatabaseModalOpen(true)}
+                  className="w-full sm:w-auto bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 hover:text-white font-semibold text-xs px-5 py-3.5 rounded-xl transition-all flex items-center justify-center space-x-2 active:scale-95"
+                >
+                  <Database className="w-4 h-4 text-slate-400" />
+                  <span>Crear Base de Datos</span>
+                </button>
+              </div>
+
+              {/* Badges */}
+              <div className="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-center gap-2 text-[11px] text-slate-400">
+                <span className="px-2.5 py-1 rounded-md bg-slate-800/60 border border-slate-700/50">⚡ Compatibilidad Arduino MicroDB</span>
+                <span className="px-2.5 py-1 rounded-md bg-slate-800/60 border border-slate-700/50">📁 FAT32 SD Cards</span>
+                <span className="px-2.5 py-1 rounded-md bg-slate-800/60 border border-slate-700/50">🔗 DBeaver Bridge</span>
+              </div>
             </div>
-            <div className="max-w-md space-y-2">
-              <h2 className="text-xl font-bold text-white">Bienvenido a MicroDB Studio</h2>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Selecciona una tarjeta SD conectada a tu PC o elige cualquier carpeta local que contenga bases de datos o archivos{' '}
-                <code className="text-sky-300 font-mono">.tbl</code> de MicroDB.
-              </p>
-            </div>
-            <button
-              onClick={() => setDriveModalOpen(true)}
-              className="bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs px-6 py-3 rounded-xl transition-all shadow-lg shadow-sky-500/25 flex items-center space-x-2 active:scale-95"
-            >
-              <FolderOpen className="w-4 h-4" />
-              <span>Abrir Tarjeta SD o Carpeta Local</span>
-            </button>
           </div>
         ) : (
           <>
@@ -382,6 +443,8 @@ export const App: React.FC = () => {
                 setVacuumModalOpen(true);
               }}
               onDropTable={handleDropTable}
+              onOpenDriveModal={() => setDriveModalOpen(true)}
+              onCloseDirectory={handleCloseDirectory}
             />
 
             {/* Central Content Area based on activeTab */}

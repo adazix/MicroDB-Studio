@@ -13,7 +13,9 @@ import {
   Database,
   ChevronDown,
   Plus,
-  FolderPlus
+  FolderPlus,
+  FolderOpen,
+  FolderX
 } from 'lucide-react';
 import { TableSummary, DatabaseInfo } from '../types/microdb.js';
 
@@ -28,6 +30,8 @@ interface TableExplorerProps {
   onSelectTable: (tableName: string) => void;
   onOpenVacuumModal: (tableName: string) => void;
   onDropTable: (tableName: string) => void;
+  onOpenDriveModal?: () => void;
+  onCloseDirectory?: () => void;
 }
 
 export const TableExplorer: React.FC<TableExplorerProps> = ({
@@ -40,7 +44,9 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
   selectedTable,
   onSelectTable,
   onOpenVacuumModal,
-  onDropTable
+  onDropTable,
+  onOpenDriveModal,
+  onCloseDirectory
 }) => {
   const [search, setSearch] = useState('');
   const [dbDropdownOpen, setDbDropdownOpen] = useState(false);
@@ -154,17 +160,45 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
                   );
                 })}
 
-                {/* Add new DB button inside dropdown */}
-                <button
-                  onClick={() => {
-                    setDbDropdownOpen(false);
-                    onOpenNewDatabaseModal();
-                  }}
-                  className="w-full flex items-center justify-center space-x-1.5 p-2 rounded-lg text-xs font-semibold text-sky-400 hover:bg-sky-500/10 transition-colors border-t border-[#30363d]/50 mt-1"
-                >
-                  <FolderPlus className="w-3.5 h-3.5" />
-                  <span>Crear Nueva Base de Datos</span>
-                </button>
+                {/* Actions inside dropdown */}
+                <div className="pt-1 border-t border-[#30363d]/50 space-y-0.5">
+                  <button
+                    onClick={() => {
+                      setDbDropdownOpen(false);
+                      onOpenNewDatabaseModal();
+                    }}
+                    className="w-full flex items-center space-x-2 p-2 rounded-lg text-xs font-semibold text-sky-400 hover:bg-sky-500/10 transition-colors"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5" />
+                    <span>Crear Nueva Base de Datos</span>
+                  </button>
+
+                  {onOpenDriveModal && (
+                    <button
+                      onClick={() => {
+                        setDbDropdownOpen(false);
+                        onOpenDriveModal();
+                      }}
+                      className="w-full flex items-center space-x-2 p-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-[#21262d] transition-colors"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Abrir otra carpeta o SD...</span>
+                    </button>
+                  )}
+
+                  {onCloseDirectory && (
+                    <button
+                      onClick={() => {
+                        setDbDropdownOpen(false);
+                        onCloseDirectory();
+                      }}
+                      className="w-full flex items-center space-x-2 p-2 rounded-lg text-xs font-medium text-rose-400 hover:bg-rose-500/10 transition-colors"
+                    >
+                      <FolderX className="w-3.5 h-3.5" />
+                      <span>Cerrar ubicación actual</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </>
           )}

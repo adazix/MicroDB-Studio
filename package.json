@@ -4,7 +4,7 @@
   "type": "module",
   "description": "MicroDB Studio - Software de escritorio y visor/gestor visual de bases de datos para tarjetas SD con MicroDB y compatibilidad con DBeaver",
   "author": "Jairo Antonio Rohatan Zapata & Adazix Systems S.A.S",
-  "main": "server/index.ts",
+  "main": "electron/main.cjs",
   "packageManager": "pnpm@11.1.2",
   "scripts": {
     "dev:server": "tsx watch server/index.ts",
@@ -13,7 +13,18 @@
     "build:client": "vite build",
     "build:server": "tsc -p server/tsconfig.json",
     "build": "pnpm build:client && pnpm build:server",
-    "start": "tsx server/index.ts"
+    "start": "tsx server/index.ts",
+    "desktop:dev": "concurrently \"pnpm dev:server\" \"wait-on http://localhost:3001 && electron electron/main.cjs\"",
+    "desktop:start": "pnpm build && electron electron/main.cjs",
+    "dist:win": "pnpm build && electron-builder --win",
+    "dist:portable": "pnpm build && electron-builder --win portable"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "electron-winstaller",
+      "esbuild"
+    ]
   },
   "dependencies": {
     "@types/sql.js": "^1.4.11",
@@ -42,10 +53,43 @@
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
+    "electron": "^44.4.3",
+    "electron-builder": "^26.15.3",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vite": "^6.0.11"
+    "vite": "^6.0.11",
+    "wait-on": "^9.1.0"
+  },
+  "build": {
+    "appId": "com.adazix.microdbstudio",
+    "productName": "MicroDB Studio",
+    "copyright": "Copyright © 2026 Adazix Systems S.A.S & Jairo Antonio Rohatan Zapata",
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-server/**/*",
+      "electron/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "public/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MicroDB Studio"
+    }
   }
 }

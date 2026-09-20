@@ -72,7 +72,9 @@ function scanDatabases(rootDir: string): DatabaseItem[] {
             path: subPath,
             tableCount: tblFiles.length
           });
-        } catch (e) {}
+        } catch (e) {
+          console.warn(`No se pudo escanear el directorio ${subPath}:`, e);
+        }
       }
     }
 
@@ -170,7 +172,6 @@ function findSchemaForTable(dirPath: string | null, tableName: string, header?: 
 
       // Prioridad 2: Archivo binario .sch
       for (const f of files) {
-        const fLower = f.toLowerCase();
         const base = f.replace(/\.sch$/i, '').toLowerCase();
         if (base === lower) {
           try {
@@ -221,7 +222,7 @@ function loadSchemasFromDisk(dirPath: string) {
           schemas.set(tableName.toLowerCase(), parsed);
           schemas.set(tableName.toUpperCase(), parsed);
           schemas.set(tableName, parsed);
-        } catch (e) {}
+        } catch (e) { }
       } else if (lower.endsWith('.jsn') || (lower.endsWith('.json') && !lower.endsWith('.schema.json'))) {
         const tableName = f.replace(/\.(json|jsn)$/i, '');
         try {
@@ -238,7 +239,7 @@ function loadSchemasFromDisk(dirPath: string) {
               schemas.set(converted.tableName, converted);
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -256,7 +257,7 @@ function loadSchemasFromDisk(dirPath: string) {
               schemas.set(tableName.toUpperCase(), converted);
               schemas.set(tableName, converted);
             }
-          } catch (e) {}
+          } catch (e) { }
         }
       }
     }
@@ -268,7 +269,7 @@ function loadSchemasFromDisk(dirPath: string) {
 // Validar Claves Foráneas (Foreign Keys) antes de insertar o actualizar
 function validateForeignKeys(
   dirPath: string,
-  tableName: string,
+  _tableName: string,
   recordData: Record<string, any>,
   schema: TableSchema
 ) {
@@ -372,7 +373,7 @@ function saveSchemaToDisk(dirPath: string, schema: TableSchema) {
 // ============================================================================
 
 // 1. Obtener lista de unidades de disco y tarjetas SD
-app.get('/api/drives', async (req, res) => {
+app.get('/api/drives', async (_req, res) => {
   try {
     const drives = await DiskDetector.getAvailableDrives();
     res.json({ success: true, drives, currentDbDirectory, rootDirectory, activeDatabase: currentDatabase });
@@ -382,7 +383,7 @@ app.get('/api/drives', async (req, res) => {
 });
 
 // 1.1 Obtener lista de bases de datos detectadas en la SD / directorio
-app.get('/api/databases', (req, res) => {
+app.get('/api/databases', (_req, res) => {
   try {
     if (!rootDirectory || !fs.existsSync(rootDirectory)) {
       return res.json({
@@ -598,8 +599,26 @@ app.post('/api/open-directory', async (req, res) => {
   }
 });
 
+// 2.1 Cerrar directorio / desconectar ubicación activa
+app.post('/api/close-directory', async (req, res) => {
+  try {
+    sdWatcher.stop();
+    rootDirectory = null;
+    currentDatabase = 'DB';
+    currentDbDirectory = null;
+    schemas.clear();
+
+    res.json({
+      success: true,
+      message: 'Directorio cerrado correctamente'
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // 3. Listar todas las tablas en el directorio actual
-app.get('/api/tables', (req, res) => {
+app.get('/api/tables', (_req, res) => {
   try {
     if (!currentDbDirectory || !fs.existsSync(currentDbDirectory)) {
       return res.json({ success: true, tables: [] });
@@ -834,7 +853,7 @@ app.delete('/api/table/:name', async (req, res) => {
     for (const f of possibleSchemaFiles) {
       const p = path.join(currentDbDirectory, f);
       if (fs.existsSync(p)) {
-        try { fs.unlinkSync(p); } catch (e) {}
+        try { fs.unlinkSync(p); } catch (e) { }
       }
     }
     schemas.delete(tableName);

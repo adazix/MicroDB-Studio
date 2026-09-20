@@ -12,7 +12,8 @@ import {
   Download,
   PlusCircle,
   Radio,
-  FolderOpen
+  FolderOpen,
+  FolderX
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -21,6 +22,7 @@ interface NavbarProps {
   currentDirectory: string | null;
   activeDatabase?: string;
   onOpenDriveModal: () => void;
+  onCloseDirectory?: () => void;
   onOpenDBeaverModal: () => void;
   onOpenExportModal: () => void;
   onOpenNewTableModal: () => void;
@@ -34,6 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentDirectory,
   activeDatabase,
   onOpenDriveModal,
+  onCloseDirectory,
   onOpenDBeaverModal,
   onOpenExportModal,
   onOpenNewTableModal,
@@ -60,27 +63,39 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Directory & SD Status Badge */}
-        <button
-          onClick={onOpenDriveModal}
-          className="flex items-center space-x-2 bg-[#0d1117] hover:bg-[#21262d] border border-[#30363d] hover:border-sky-500/50 rounded-lg px-3 py-1.5 transition-all text-xs max-w-sm group"
-          title="Cambiar carpeta o Tarjeta SD"
-        >
-          <FolderOpen className="w-4 h-4 text-sky-400 shrink-0 group-hover:scale-110 transition-transform" />
-          <span className="font-mono text-slate-300 truncate max-w-[220px]">
-            {currentDirectory || 'Seleccionar SD o Carpeta...'}
-          </span>
-          {activeDatabase && activeDatabase !== '/' && (
-            <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono text-[10px] font-bold border border-sky-500/30">
-              /{activeDatabase}
+        <div className="flex items-center space-x-1.5">
+          <button
+            onClick={onOpenDriveModal}
+            className="flex items-center space-x-2 bg-[#0d1117] hover:bg-[#21262d] border border-[#30363d] hover:border-sky-500/50 rounded-lg px-3 py-1.5 transition-all text-xs max-w-sm group"
+            title="Cambiar carpeta o Tarjeta SD"
+          >
+            <FolderOpen className="w-4 h-4 text-sky-400 shrink-0 group-hover:scale-110 transition-transform" />
+            <span className="font-mono text-slate-300 truncate max-w-[200px]">
+              {currentDirectory || 'Seleccionar SD o Carpeta...'}
             </span>
+            {activeDatabase && activeDatabase !== '/' && (
+              <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono text-[10px] font-bold border border-sky-500/30">
+                /{activeDatabase}
+              </span>
+            )}
+            {isWatching && (
+              <span className="flex items-center space-x-1 pl-1 text-emerald-400 font-semibold text-[10px] shrink-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>LIVE SD</span>
+              </span>
+            )}
+          </button>
+
+          {currentDirectory && onCloseDirectory && (
+            <button
+              onClick={onCloseDirectory}
+              className="p-1.5 bg-[#0d1117] hover:bg-rose-500/20 border border-[#30363d] hover:border-rose-500/50 text-slate-400 hover:text-rose-400 rounded-lg transition-all"
+              title="Cerrar ubicación actual y volver a la pantalla de bienvenida"
+            >
+              <FolderX className="w-4 h-4" />
+            </button>
           )}
-          {isWatching && (
-            <span className="flex items-center space-x-1 pl-1 text-emerald-400 font-semibold text-[10px] shrink-0">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>LIVE SD</span>
-            </span>
-          )}
-        </button>
+        </div>
       </div>
 
       {/* Center Navigation Tabs */}

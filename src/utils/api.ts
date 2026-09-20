@@ -21,6 +21,14 @@ export async function fetchDrives(): Promise<{ drives: DetectedDrive[]; currentD
   return data;
 }
 
+export async function closeDirectory(): Promise<void> {
+  const res = await fetch(`${API_BASE}/close-directory`, {
+    method: 'POST'
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error);
+}
+
 export async function fetchDatabases(): Promise<{
   databases: DatabaseInfo[];
   activeDatabase: string;
