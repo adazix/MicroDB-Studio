@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 Guía de Integración con Arduino
+    url: https://github.com/adazix/MicroDB-Studio/blob/main/GUIA_ARDUINO_MICRODB.md
+    about: Consulta ejemplos de código C++, estructuras y esquemas de base de datos para Arduino/ESP32.
+  - name: 📚 Documentación Técnica del Software
+    url: https://github.com/adazix/MicroDB-Studio/blob/main/DOCUMENTACION_SOFTWARE.md
+    about: Aprende cómo funciona el motor binario, el puente DBeaver SQLite y el mapa de sectores.
