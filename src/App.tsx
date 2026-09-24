@@ -476,6 +476,12 @@ export const App: React.FC = () => {
                       setHexModalOpen(true);
                     }}
                     onDropTableClick={() => selectedTableName && handleDropTable(selectedTableName)}
+                    onVacuumClick={() => {
+                      if (selectedTableName) {
+                        setVacuumTargetTable(selectedTableName);
+                        setVacuumModalOpen(true);
+                      }
+                    }}
                   />
                 ) : (
                   <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500">
@@ -586,7 +592,13 @@ export const App: React.FC = () => {
             setVacuumTargetTable(null);
           }}
           tableName={vacuumTargetTable}
+          deletedRecordsCount={
+            vacuumTargetTable === selectedTableName
+              ? selectedTableDetail?.header.deletedRecords
+              : tables.find((t) => t.name === vacuumTargetTable)?.header.deletedRecords
+          }
           onDefragComplete={() => {
+            loadDatabases();
             loadTables(vacuumTargetTable);
             if (selectedTableName === vacuumTargetTable) {
               loadTableDetail(vacuumTargetTable);

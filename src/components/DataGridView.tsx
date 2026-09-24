@@ -15,7 +15,8 @@ import {
   ShieldCheck,
   Key,
   ArrowLeft,
-  ExternalLink
+  ExternalLink,
+  Zap
 } from 'lucide-react';
 import { TableSchema, TableHeaderData, DecodedRecord, FieldSchema } from '../types/microdb.js';
 
@@ -39,6 +40,7 @@ interface DataGridViewProps {
   onDeleteClick: (slotIndex: number) => void;
   onInspectHexClick: (record: DecodedRecord) => void;
   onDropTableClick?: () => void;
+  onVacuumClick?: () => void;
 }
 
 // Criterio estricto: Sólo es Clave Foránea si está explícitamente definida en el esquema (isForeignKey + referencesTable)
@@ -63,7 +65,8 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
   onEditClick,
   onDeleteClick,
   onInspectHexClick,
-  onDropTableClick
+  onDropTableClick,
+  onVacuumClick
 }) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'deleted'>('all');
@@ -184,6 +187,30 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
           </div>
 
           <div className="flex items-center space-x-2">
+            {onVacuumClick && (
+              <button
+                onClick={onVacuumClick}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+                  header.deletedRecords > 0
+                    ? 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-500/10'
+                    : 'bg-[#21262d] hover:bg-[#30363d] border-[#30363d] text-slate-400 hover:text-slate-200'
+                }`}
+                title={
+                  header.deletedRecords > 0
+                    ? `Compactar tabla y eliminar definitivamente ${header.deletedRecords} registro(s) borrado(s) (Vacuum)`
+                    : 'Ejecutar mantenimiento Vacuum (la tabla ya está compactada)'
+                }
+              >
+                <Zap className={`w-3.5 h-3.5 ${header.deletedRecords > 0 ? 'text-amber-400' : 'text-slate-400'}`} />
+                <span>Vacuum</span>
+                {header.deletedRecords > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-500/30 text-amber-200">
+                    {header.deletedRecords}
+                  </span>
+                )}
+              </button>
+            )}
+
             {onDropTableClick && (
               <button
                 onClick={onDropTableClick}
@@ -249,6 +276,25 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Banner for Deleted Records / Vacuum Action */}
+      {statusFilter === 'deleted' && header.deletedRecords > 0 && onVacuumClick && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-5 py-2.5 flex items-center justify-between text-xs text-amber-300 animate-in fade-in duration-150">
+          <div className="flex items-center space-x-2.5">
+            <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              Hay <strong className="text-white font-mono">{header.deletedRecords}</strong> registro(s) borrado(s) temporalmente (Tombstones en Free-List). Ocupan espacio físico en la SD hasta que se ejecute Vacuum.
+            </span>
+          </div>
+          <button
+            onClick={onVacuumClick}
+            className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs transition-all shadow-md shadow-amber-500/20 flex items-center space-x-1.5 shrink-0"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>Purgar con Vacuum</span>
+          </button>
+        </div>
+      )}
 
       {/* Main Table Grid */}
       <div className="flex-1 overflow-auto">

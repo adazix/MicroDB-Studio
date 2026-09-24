@@ -23,8 +23,8 @@
 ### 🖥️ 1. Ejecutables para Windows (Releases)
 
 MicroDB Studio se distribuye como aplicación nativa de escritorio para Windows:
-- **Instalador NSIS:** `MicroDB Studio Setup 1.0.0.exe` (crea accesos directos y asistente de instalación).
-- **Versión Portable:** `MicroDB Studio 1.0.0.exe` (ejecutable autónomo *single-file*, no requiere instalación ni permisos de administrador).
+- **Instalador NSIS:** `MicroDB Studio Setup 1.1.0.exe` (crea accesos directos y asistente de instalación).
+- **Versión Portable:** `MicroDB Studio 1.1.0.exe` (ejecutable autónomo *single-file*, no requiere instalación ni permisos de administrador).
 
 ### 🛠️ 2. Ejecutar desde Código Fuente (Desarrollo)
 

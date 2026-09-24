@@ -15,6 +15,7 @@ interface DefragModalProps {
   isOpen: boolean;
   onClose: () => void;
   tableName: string;
+  deletedRecordsCount?: number;
   onDefragComplete: () => void;
 }
 
@@ -22,6 +23,7 @@ export const DefragModal: React.FC<DefragModalProps> = ({
   isOpen,
   onClose,
   tableName,
+  deletedRecordsCount,
   onDefragComplete
 }) => {
   const [loading, setLoading] = useState(false);
@@ -74,6 +76,15 @@ export const DefragModal: React.FC<DefragModalProps> = ({
             <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-400 flex items-center space-x-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {!result && deletedRecordsCount !== undefined && deletedRecordsCount > 0 && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-center space-x-2.5">
+              <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                Se purgarán y liberarán definitivamente <strong className="text-white font-mono">{deletedRecordsCount}</strong> registro(s) borrado(s) (tombstones).
+              </span>
             </div>
           )}
 

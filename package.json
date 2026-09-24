@@ -1,6 +1,6 @@
 {
   "name": "microdb-studio",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "MicroDB Studio - Software de escritorio y visor/gestor visual de bases de datos para tarjetas SD con MicroDB y compatibilidad con DBeaver",
   "author": "Jairo Antonio Rohatan Zapata & Adazix Systems S.A.S",

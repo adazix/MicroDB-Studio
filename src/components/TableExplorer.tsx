@@ -276,6 +276,20 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
                       </span>
                     )}
 
+                    {/* Quick Vacuum Button if table has deleted records */}
+                    {table.header.deletedRecords > 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenVacuumModal(table.name);
+                        }}
+                        className="p-1 text-amber-400 hover:text-amber-300 hover:bg-amber-500/15 rounded transition-all"
+                        title={`Compactar tabla '${table.name}' (Vacuum: ${table.header.deletedRecords} registros reciclables)`}
+                      >
+                        <Zap className="w-3.5 h-3.5 fill-current" />
+                      </button>
+                    )}
+
                     {/* Drop Table Button */}
                     <button
                       onClick={(e) => {
@@ -309,14 +323,26 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
                 <div className="mt-2 pt-2 border-t border-[#30363d]/60 flex items-center justify-between text-[11px] text-slate-400">
                   <span>Slot: <strong className="text-slate-300 font-mono">{table.header.recordSize}B</strong></span>
                   <div className="flex items-center space-x-1.5">
-                    <span>Frag: <strong className={frag > 20 ? 'text-amber-400' : 'text-slate-300'}>{frag}%</strong></span>
-                    {frag > 20 && (
+                    <span>Frag: <strong className={table.header.deletedRecords > 0 || frag > 0 ? 'text-amber-400' : 'text-slate-300'}>{frag}%</strong></span>
+                    {(table.header.deletedRecords > 0 || frag > 0) ? (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           onOpenVacuumModal(table.name);
                         }}
-                        className="text-[10px] text-amber-400 hover:text-amber-300 font-bold underline"
+                        className="text-[10px] text-amber-400 hover:text-amber-300 font-bold underline flex items-center space-x-0.5"
+                        title={`Ejecutar Vacuum para compactar ${table.header.deletedRecords} registros borrados`}
+                      >
+                        <span>VACUUM</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenVacuumModal(table.name);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 text-[10px] text-slate-400 hover:text-slate-200 underline transition-opacity"
+                        title="Desfragmentar / Vacuum preventivo"
                       >
                         VACUUM
                       </button>
