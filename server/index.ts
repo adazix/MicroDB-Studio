@@ -80,12 +80,12 @@ function scanDatabases(rootDir: string): DatabaseItem[] {
       }
     }
 
-    // 3. Si se abrió una carpeta específica y no es raíz de unidad, incluirla a ella misma
-    if (results.length === 0 && !isDriveRoot && currentDbDirectory === rootDir) {
+    // 3. Si se abrió una carpeta específica y no es raíz de unidad, incluirla a ella misma SÓLO si es una carpeta de base de datos válida
+    if (results.length === 0 && !isDriveRoot && isDatabaseFolder(rootDir)) {
       results.push({
-        name: path.basename(rootDir) || 'DB',
+        name: path.basename(rootDir),
         path: rootDir,
-        tableCount: 0
+        tableCount: countDatabaseTables(rootDir)
       });
     }
   } catch (e) {
@@ -420,10 +420,12 @@ app.post('/api/select-database', async (req, res) => {
     }
 
     currentDatabase = databaseName;
-    currentDbDirectory = databaseName === 'Principal (Raíz)' ? rootDirectory : path.join(rootDirectory, databaseName);
+    currentDbDirectory = databaseName === 'Principal (Raíz)' || databaseName === 'Raíz (/)' || databaseName === '/'
+      ? rootDirectory
+      : path.join(rootDirectory, databaseName);
 
     if (!fs.existsSync(currentDbDirectory)) {
-      fs.mkdirSync(currentDbDirectory, { recursive: true });
+      return res.status(404).json({ success: false, error: `La base de datos '${databaseName}' no existe en disco` });
     }
 
     loadSchemasFromDisk(currentDbDirectory);
@@ -536,6 +538,202 @@ app.post('/api/browse-directory', async (req, res) => {
   }
 });
 
+// 1.3.2 Explorar directorios y subcarpetas para navegación interactiva
+app.post('/api/fs/explore', async (req, res) => {
+  try {
+    let { targetPath } = req.body;
+
+    if (!targetPath || typeof targetPath !== 'string' || !targetPath.trim()) {
+      if (currentDbDirectory && fs.existsSync(currentDbDirectory)) {
+        targetPath = currentDbDirectory;
+      } else if (rootDirectory && fs.existsSync(rootDirectory)) {
+        targetPath = rootDirectory;
+      } else {
+        const drives = await DiskDetector.getAvailableDrives();
+        targetPath = drives.length > 0
+          ? (drives[0].letter.endsWith('\\') ? drives[0].letter : `${drives[0].letter}\\`)
+          : 'C:\\';
+      }
+    }
+
+    targetPath = targetPath.trim();
+    if (/^[a-zA-Z]:$/.test(targetPath)) {
+      targetPath = `${targetPath}\\`;
+    }
+
+    const normalized = path.normalize(targetPath);
+    if (!fs.existsSync(normalized)) {
+      return res.status(404).json({ success: false, error: `La ruta no existe: ${normalized}` });
+    }
+
+    const stat = fs.statSync(normalized);
+    if (!stat.isDirectory()) {
+      return res.status(400).json({ success: false, error: `La ruta no es un directorio: ${normalized}` });
+    }
+
+    const driveMatch = normalized.match(/^([a-zA-Z]:)/);
+    const driveLetter = driveMatch ? driveMatch[1].toUpperCase() : (normalized.startsWith('/') ? '/' : '');
+
+    const parentDir = path.dirname(normalized);
+    const isDriveRoot = /^[a-zA-Z]:\\?$/.test(normalized) || normalized === '/' || normalized === '\\';
+    const parentPath = isDriveRoot ? null : parentDir;
+
+    // Construcción de breadcrumbs interactivos
+    const breadcrumbs: { name: string; path: string }[] = [];
+    if (process.platform === 'win32' && driveMatch) {
+      const rootPart = `${driveLetter}\\`;
+      breadcrumbs.push({ name: driveLetter, path: rootPart });
+      const relative = path.relative(rootPart, normalized);
+      if (relative && relative !== '.') {
+        const parts = relative.split(/[\\/]+/).filter(Boolean);
+        let acc = rootPart;
+        for (const p of parts) {
+          acc = path.join(acc, p);
+          breadcrumbs.push({ name: p, path: acc });
+        }
+      }
+    } else {
+      breadcrumbs.push({ name: '/', path: '/' });
+      const parts = normalized.split('/').filter(Boolean);
+      let acc = '';
+      for (const p of parts) {
+        acc = `${acc}/${p}`;
+        breadcrumbs.push({ name: p, path: acc });
+      }
+    }
+
+    // Listar entradas de directorio de forma segura
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(normalized, { withFileTypes: true });
+    } catch (e: any) {
+      return res.status(403).json({ success: false, error: `Acceso denegado a la carpeta: ${e.message}` });
+    }
+
+    // Tablas directamente en la carpeta actual
+    const currentTblFiles = entries
+      .filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.tbl'))
+      .map((e) => e.name.replace(/\.tbl$/i, ''));
+
+    // Subdirectorios
+    const directories: Array<{
+      name: string;
+      path: string;
+      isDatabase: boolean;
+      tableCount: number;
+      tables: string[];
+    }> = [];
+
+    for (const entry of entries) {
+      if (entry.isDirectory() && !isSystemOrIgnoredDir(entry.name)) {
+        const subPath = path.join(normalized, entry.name);
+        try {
+          const subFiles = fs.readdirSync(subPath);
+          const tbls = subFiles
+            .filter((f) => f.toLowerCase().endsWith('.tbl'))
+            .map((f) => f.replace(/\.tbl$/i, ''));
+          const hasDbMarker = subFiles.some((f) => {
+            const l = f.toLowerCase();
+            return (
+              l === '.microdb' ||
+              l === 'microdb.json' ||
+              l.endsWith('.jsn') ||
+              l.endsWith('.schema.json') ||
+              l.endsWith('.sch')
+            );
+          });
+
+          directories.push({
+            name: entry.name,
+            path: subPath,
+            isDatabase: tbls.length > 0 || hasDbMarker,
+            tableCount: tbls.length,
+            tables: tbls
+          });
+        } catch {
+          // Si no hay permisos para leer el interior de la subcarpeta, se lista como carpeta normal
+          directories.push({
+            name: entry.name,
+            path: subPath,
+            isDatabase: false,
+            tableCount: 0,
+            tables: []
+          });
+        }
+      }
+    }
+
+    directories.sort((a, b) => {
+      if (a.isDatabase && !b.isDatabase) return -1;
+      if (!a.isDatabase && b.isDatabase) return 1;
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    res.json({
+      success: true,
+      currentPath: normalized,
+      driveLetter,
+      parentPath,
+      breadcrumbs,
+      directories,
+      currentFolderTables: currentTblFiles,
+      isDatabaseFolder: currentTblFiles.length > 0 || entries.some((e) => e.name.toLowerCase() === '.microdb')
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Error explorando directorio' });
+  }
+});
+
+// 1.3.3 Crear carpeta / base de datos en un directorio específico
+app.post('/api/fs/create-folder', async (req, res) => {
+  try {
+    const { parentPath, folderName, isDatabase = true } = req.body;
+    if (!parentPath || typeof parentPath !== 'string') {
+      return res.status(400).json({ success: false, error: 'Ruta padre no proporcionada' });
+    }
+    if (!folderName || typeof folderName !== 'string' || !folderName.trim()) {
+      return res.status(400).json({ success: false, error: 'Nombre de carpeta no proporcionado' });
+    }
+
+    const cleanName = folderName.trim().replace(/[\\/:*?"<>|]/g, '_');
+    if (!cleanName) {
+      return res.status(400).json({ success: false, error: 'Nombre de carpeta inválido' });
+    }
+
+    const normalizedParent = path.normalize(parentPath);
+    if (!fs.existsSync(normalizedParent)) {
+      return res.status(404).json({ success: false, error: `La ruta padre no existe: ${normalizedParent}` });
+    }
+
+    const targetDir = path.join(normalizedParent, cleanName);
+    if (fs.existsSync(targetDir)) {
+      return res.status(400).json({ success: false, error: `La carpeta '${cleanName}' ya existe en esta ubicación.` });
+    }
+
+    fs.mkdirSync(targetDir, { recursive: true });
+
+    if (isDatabase) {
+      const markerPath = path.join(targetDir, '.microdb');
+      try {
+        fs.writeFileSync(
+          markerPath,
+          JSON.stringify({ name: cleanName, createdAt: new Date().toISOString() }, null, 2),
+          'utf8'
+        );
+      } catch { }
+    }
+
+    res.json({
+      success: true,
+      folderPath: targetDir,
+      folderName: cleanName,
+      message: `Carpeta '${cleanName}' creada exitosamente en ${normalizedParent}`
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Error creando carpeta' });
+  }
+});
+
 // 1.4 Eliminar base de datos completa de la SD
 app.delete('/api/database/:name', async (req, res) => {
   try {
@@ -551,15 +749,18 @@ app.delete('/api/database/:name', async (req, res) => {
     }
 
     const dbs = scanDatabases(rootDirectory);
-    currentDatabase = dbs[0] ? dbs[0].name : 'DB';
-    currentDbDirectory = currentDatabase === 'Principal (Raíz)' ? rootDirectory : path.join(rootDirectory, currentDatabase);
-
-    if (!fs.existsSync(currentDbDirectory)) {
-      fs.mkdirSync(currentDbDirectory, { recursive: true });
+    if (dbs.length > 0) {
+      currentDatabase = dbs[0].name;
+      currentDbDirectory = currentDatabase === 'Principal (Raíz)' || currentDatabase === 'Raíz (/)' || currentDatabase === '/'
+        ? rootDirectory
+        : path.join(rootDirectory, currentDatabase);
+      loadSchemasFromDisk(currentDbDirectory);
+      await SQLiteBridge.syncFolderToSqlite(currentDbDirectory, schemas);
+    } else {
+      currentDatabase = '';
+      currentDbDirectory = null;
+      schemas.clear();
     }
-
-    loadSchemasFromDisk(currentDbDirectory);
-    await SQLiteBridge.syncFolderToSqlite(currentDbDirectory, schemas);
 
     res.json({
       success: true,
@@ -586,13 +787,9 @@ app.post('/api/open-directory', async (req, res) => {
 
     const normalized = path.normalize(dirPath);
 
-    // Si no existe pero es un subdirectorio válido o ruta de disco, intentar crearlo
+    // Si no existe, no intentar crearlo automáticamente
     if (!fs.existsSync(normalized)) {
-      try {
-        fs.mkdirSync(normalized, { recursive: true });
-      } catch (err: any) {
-        return res.status(400).json({ success: false, error: `Directorio no válido o inaccesible: ${normalized}` });
-      }
+      return res.status(400).json({ success: false, error: `Directorio no válido o inaccesible: ${normalized}` });
     }
 
     const isDriveRoot = /^[a-zA-Z]:\\?$/.test(normalized) || normalized === '/' || normalized === '\\';
@@ -602,14 +799,20 @@ app.post('/api/open-directory', async (req, res) => {
     const folderName = path.basename(normalized);
 
     if (isDriveRoot) {
-      // El usuario seleccionó la raíz de la unidad SD (ej: E:\)
+      // El usuario seleccionó la raíz de la unidad (ej: E:\ o D:\)
       rootDirectory = normalized;
       const dbs = scanDatabases(rootDirectory);
-      const dbWithTables = dbs.find((d) => d.tableCount > 0);
-      currentDatabase = dbWithTables ? dbWithTables.name : (dbs[0] ? dbs[0].name : 'DB');
-      currentDbDirectory = currentDatabase === 'Principal (Raíz)' || currentDatabase === 'Raíz (/)' || currentDatabase === '/'
-        ? rootDirectory
-        : path.join(rootDirectory, currentDatabase);
+      if (dbs.length > 0) {
+        const dbWithTables = dbs.find((d) => d.tableCount > 0);
+        currentDatabase = dbWithTables ? dbWithTables.name : dbs[0].name;
+        currentDbDirectory = currentDatabase === 'Principal (Raíz)' || currentDatabase === 'Raíz (/)' || currentDatabase === '/'
+          ? rootDirectory
+          : path.join(rootDirectory, currentDatabase);
+      } else {
+        // La unidad no contiene bases de datos todavía. NO crear nada automáticamente.
+        currentDatabase = '';
+        currentDbDirectory = null;
+      }
     } else {
       // El usuario abrió una carpeta específica.
       // Comprobamos si tiene subcarpetas que sean bases de datos MicroDB reales.
@@ -624,31 +827,33 @@ app.post('/api/open-directory', async (req, res) => {
         const subWithTables = databaseSubfolders.find((e) => countDatabaseTables(path.join(normalized, e.name)) > 0);
         currentDatabase = subWithTables ? subWithTables.name : databaseSubfolders[0].name;
         currentDbDirectory = path.join(rootDirectory, currentDatabase);
-      } else {
-        // La carpeta seleccionada es ELLA MISMA la base de datos abierta directamente
-        rootDirectory = parentDir && parentDir !== normalized ? parentDir : normalized;
-        currentDatabase = folderName || 'DB';
+      } else if (hasTblDirectly || isDatabaseFolder(normalized)) {
+        // La carpeta seleccionada es ELLA MISMA una base de datos MicroDB legítima existente
+        const isParentDrive = /^[a-zA-Z]:\\?$/.test(parentDir) || parentDir === '/' || parentDir === '\\';
+        rootDirectory = isParentDrive ? normalized : (parentDir || normalized);
+        currentDatabase = folderName;
         currentDbDirectory = normalized;
-
-        // Si no tiene tablas ni marcador, crear marcador para que sea identificada como base de datos MicroDB
-        const markerPath = path.join(normalized, '.microdb');
-        if (!fs.existsSync(markerPath) && !hasTblDirectly) {
-          try {
-            fs.writeFileSync(markerPath, JSON.stringify({ name: currentDatabase, createdAt: new Date().toISOString() }, null, 2), 'utf8');
-          } catch { }
-        }
+      } else {
+        // Carpeta ordinaria o vacía. NO creamos .microdb, NO creamos carpetas 'DB' en automático.
+        rootDirectory = normalized;
+        currentDatabase = '';
+        currentDbDirectory = null;
       }
     }
 
-    if (!fs.existsSync(currentDbDirectory)) {
-      fs.mkdirSync(currentDbDirectory, { recursive: true });
+    let sqlitePath: string | null = null;
+    if (currentDbDirectory && fs.existsSync(currentDbDirectory)) {
+      loadSchemasFromDisk(currentDbDirectory);
+      try {
+        sqlitePath = await SQLiteBridge.syncFolderToSqlite(currentDbDirectory, schemas);
+      } catch (e) {
+        console.warn('Aviso: SQLiteBridge no pudo sincronizarse:', e);
+      }
+    } else {
+      schemas.clear();
     }
 
-    loadSchemasFromDisk(currentDbDirectory);
     sdWatcher.watchDirectory(rootDirectory); // Observar toda la SD recursivamente
-
-    // Sincronizar puente SQLite inmediatamente
-    const sqlitePath = await SQLiteBridge.syncFolderToSqlite(currentDbDirectory, schemas);
 
     res.json({
       success: true,
@@ -656,7 +861,9 @@ app.post('/api/open-directory', async (req, res) => {
       activeDatabase: currentDatabase,
       currentDbDirectory,
       sqlitePath,
-      message: `Directorio abierto correctamente. Base de datos activa: '${currentDatabase}'`
+      message: currentDatabase
+        ? `Directorio abierto correctamente. Base de datos activa: '${currentDatabase}'`
+        : `Directorio abierto correctamente. Sin bases de datos preexistentes.`
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

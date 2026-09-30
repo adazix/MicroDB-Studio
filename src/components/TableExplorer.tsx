@@ -241,7 +241,22 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
 
       {/* Tables List */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {filteredTables.length === 0 ? (
+        {databases.length === 0 ? (
+          <div className="text-center py-10 px-4 text-slate-400">
+            <Database className="w-8 h-8 text-sky-500/30 mx-auto mb-2" />
+            <p className="text-xs font-semibold text-slate-300">Sin base de datos activa</p>
+            <p className="text-[11px] text-slate-500 mt-1 mb-3">
+              Crea una base de datos para comenzar a almacenar tablas.
+            </p>
+            <button
+              onClick={onOpenNewDatabaseModal}
+              className="px-3 py-1.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Nueva Base de Datos</span>
+            </button>
+          </div>
+        ) : filteredTables.length === 0 ? (
           <div className="text-center py-10 px-4 text-slate-400">
             <FileSpreadsheet className="w-8 h-8 text-slate-600 mx-auto mb-2 opacity-50" />
             <p className="text-xs font-semibold">No se encontraron tablas</p>

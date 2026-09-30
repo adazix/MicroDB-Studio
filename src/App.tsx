@@ -37,7 +37,7 @@ import {
   closeDirectory
 } from './utils/api.js';
 
-import { FolderOpen, Database, Layers } from 'lucide-react';
+import { FolderOpen, Database, Layers, Plus } from 'lucide-react';
 import { useToast } from './components/Toast.js';
 
 export const App: React.FC = () => {
@@ -487,6 +487,21 @@ export const App: React.FC = () => {
                       }
                     }}
                   />
+                ) : databases.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
+                    <Database className="w-12 h-12 text-sky-400/30 mb-3" />
+                    <p className="font-bold text-sm text-slate-200 mb-1">Sin bases de datos en esta ubicación</p>
+                    <p className="text-xs text-slate-500 max-w-sm mb-4">
+                      Esta unidad o carpeta no contiene bases de datos MicroDB. Puedes crear una nueva base de datos para comenzar.
+                    </p>
+                    <button
+                      onClick={() => setNewDatabaseModalOpen(true)}
+                      className="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-sky-500/20 transition-all flex items-center space-x-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Crear Nueva Base de Datos</span>
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500">
                     <Layers className="w-12 h-12 text-slate-600 opacity-40 mb-3" />

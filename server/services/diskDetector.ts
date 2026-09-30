@@ -68,8 +68,7 @@ export function isDatabaseFolder(dirPath: string): boolean {
         lower.endsWith('.sch') ||
         lower.endsWith('.idx') ||
         lower === '.microdb' ||
-        lower === 'microdb.json' ||
-        lower === 'microdb_live.sqlite'
+        lower === 'microdb.json'
       );
     });
   } catch {

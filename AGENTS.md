@@ -16,9 +16,24 @@ Este archivo define las directivas y el comportamiento para los asistentes de in
 
 ---
 
+## 🛑 Regla Fundamental: Separación Estricta de Desarrollo y Releases
+
+- **NUNCA ejecutes el protocolo de release en automático.**
+- Si el usuario te pide un cambio, ajuste, mejora o corrección de bugs, **LIMITATE EXCLUSIVAMENTE** a:
+  1. Modificar el código fuente.
+  2. Probar y verificar que compile con éxito (`pnpm.cmd build`).
+  3. Informar al usuario de los cambios realizados para que los valide.
+- **BAJO NINGUNA CIRCUNSTANCIA** debes incrementar versiones en `package.json`, compilar instaladores (`dist:win`), crear tags de Git ni generar notas de release a menos que el usuario lo solicite con una orden explícita y directa como:
+  - *"Crea una nueva versión"*
+  - *"Haz un release"*
+  - *"Sube el tag"*
+  - *"Genera los instaladores para publicar"*
+
+---
+
 ## 🚀 Agente de Versiones y Protocolo de Release
 
-Cuando el usuario solicite crear una nueva versión, preparar un release, subir una mejora o actualizar la versión de MicroDB Studio, **DEBES SEGUIR OBLIGATORIAMENTE ESTE PROTOCOLO**:
+Cuando el usuario solicite EXPLICITAMENTE crear una nueva versión, preparar un release, subir una mejora o actualizar la versión de MicroDB Studio, **DEBES SEGUIR OBLIGATORIAMENTE ESTE PROTOCOLO**:
 
 ### 1. Verificación Inicial de Compilación (Salud del Proyecto)
 - Ejecuta primero `pnpm.cmd build` (o `node scripts/release.mjs check`).

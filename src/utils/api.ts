@@ -9,7 +9,8 @@ import {
   DecodedRecord,
   TableHeaderData,
   SqlQueryResult,
-  DatabaseInfo
+  DatabaseInfo,
+  ExploreResult
 } from '../types/microdb.js';
 
 const API_BASE = '/api';
@@ -236,4 +237,30 @@ export async function exportData(options: {
     throw new Error(data.error || 'Error al exportar');
   }
   return await res.blob();
+}
+
+export async function exploreDirectory(targetPath?: string): Promise<ExploreResult> {
+  const res = await fetch(`${API_BASE}/fs/explore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ targetPath })
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Error explorando directorio');
+  return data;
+}
+
+export async function createFolder(
+  parentPath: string,
+  folderName: string,
+  isDatabase = true
+): Promise<{ folderPath: string; folderName: string }> {
+  const res = await fetch(`${API_BASE}/fs/create-folder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ parentPath, folderName, isDatabase })
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Error creando carpeta');
+  return data;
 }

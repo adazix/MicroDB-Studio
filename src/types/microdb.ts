@@ -106,3 +106,26 @@ export interface SqlQueryResult {
   rows: any[];
   executionTimeMs: number;
 }
+
+export interface BreadcrumbItem {
+  name: string;
+  path: string;
+}
+
+export interface DirectoryItem {
+  name: string;
+  path: string;
+  isDatabase: boolean;
+  tableCount: number;
+  tables: string[];
+}
+
+export interface ExploreResult {
+  currentPath: string;
+  driveLetter: string;
+  parentPath: string | null;
+  breadcrumbs: BreadcrumbItem[];
+  directories: DirectoryItem[];
+  currentFolderTables: string[];
+  isDatabaseFolder: boolean;
+}
