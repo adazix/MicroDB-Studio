@@ -42,11 +42,49 @@ export function isSystemOrIgnoredDir(name: string): boolean {
     lower === 'node_modules' ||
     lower === '__macosx' ||
     lower === 'recovery' ||
-    lower.startsWith('found.')
+    lower.startsWith('found.') ||
+    lower === 'windows' ||
+    lower === 'program files' ||
+    lower === 'program files (x86)' ||
+    lower === 'programdata'
   ) {
     return true;
   }
   return false;
+}
+
+export function isDatabaseFolder(dirPath: string): boolean {
+  if (!dirPath || !fs.existsSync(dirPath)) return false;
+  try {
+    const stat = fs.statSync(dirPath);
+    if (!stat.isDirectory()) return false;
+    const files = fs.readdirSync(dirPath);
+    return files.some((f) => {
+      const lower = f.toLowerCase();
+      return (
+        lower.endsWith('.tbl') ||
+        lower.endsWith('.jsn') ||
+        lower.endsWith('.schema.json') ||
+        lower.endsWith('.sch') ||
+        lower.endsWith('.idx') ||
+        lower === '.microdb' ||
+        lower === 'microdb.json' ||
+        lower === 'microdb_live.sqlite'
+      );
+    });
+  } catch {
+    return false;
+  }
+}
+
+export function countDatabaseTables(dirPath: string): number {
+  if (!dirPath || !fs.existsSync(dirPath)) return 0;
+  try {
+    const files = fs.readdirSync(dirPath);
+    return files.filter((f) => f.toLowerCase().endsWith('.tbl')).length;
+  } catch {
+    return 0;
+  }
 }
 
 export class DiskDetector {
@@ -159,30 +197,22 @@ export class DiskDetector {
       for (const entry of entries) {
         if (entry.isDirectory() && !isSystemOrIgnoredDir(entry.name)) {
           const subPath = path.join(drivePath, entry.name);
-          try {
-            const subFiles = fs.readdirSync(subPath);
-            const subTbls = subFiles
-              .filter((f) => f.toLowerCase().endsWith('.tbl'))
-              .map((f) => f.replace(/\.tbl$/i, ''));
+          if (isDatabaseFolder(subPath)) {
+            try {
+              const subFiles = fs.readdirSync(subPath);
+              const subTbls = subFiles
+                .filter((f) => f.toLowerCase().endsWith('.tbl'))
+                .map((f) => f.replace(/\.tbl$/i, ''));
 
-            const hasSchemas = subFiles.some(
-              (f) =>
-                f.toLowerCase().endsWith('.jsn') ||
-                f.toLowerCase().endsWith('.sch') ||
-                f.toLowerCase().endsWith('.schema.json')
-            );
-
-            // Si tiene tablas, esquemas, o empieza por DB/STORE/SENSORS/etc.
-            if (subTbls.length > 0 || hasSchemas || entry.name.toUpperCase().startsWith('DB')) {
               databases.push({
                 name: entry.name,
                 path: subPath,
                 tableCount: subTbls.length,
                 tables: subTbls
               });
+            } catch {
+              // Ignorar carpetas protegidas
             }
-          } catch {
-            // Ignorar carpetas protegidas
           }
         }
       }

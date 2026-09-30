@@ -56,15 +56,27 @@ export async function selectDatabase(databaseName: string): Promise<{
   return data;
 }
 
-export async function createDatabase(databaseName: string): Promise<{
+export async function createDatabase(databaseName: string, parentDirectory?: string): Promise<{
   database: DatabaseInfo;
   currentDbDirectory: string;
   sqlitePath: string;
+  activeDatabase: string;
 }> {
   const res = await fetch(`${API_BASE}/database/create`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ databaseName })
+    body: JSON.stringify({ databaseName, parentDirectory })
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error);
+  return data;
+}
+
+export async function browseDirectory(title?: string): Promise<{ canceled: boolean; selectedPath?: string }> {
+  const res = await fetch(`${API_BASE}/browse-directory`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title })
   });
   const data = await res.json();
   if (!data.success) throw new Error(data.error);

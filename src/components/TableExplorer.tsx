@@ -88,7 +88,11 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
               </div>
               <div className="truncate text-left">
                 <div className="font-bold text-xs text-white truncate">
-                  {isRootDb ? 'Raíz de la SD (/)' : `/${activeDatabase}`}
+                  {databases.length === 0
+                    ? 'Sin base de datos'
+                    : isRootDb
+                    ? 'Raíz (/)'
+                    : `/${activeDatabase}`}
                 </div>
                 <div className="text-[10px] text-slate-400">
                   {tables.length} tabla{tables.length !== 1 ? 's' : ''} disponible{tables.length !== 1 ? 's' : ''}
@@ -111,10 +115,16 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
               />
               <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#161b22] border border-[#30363d] rounded-xl shadow-2xl z-50 p-1.5 space-y-1 max-h-64 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
                 <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                  Bases de Datos en la SD ({databases.length})
+                  Bases de Datos ({databases.length})
                 </div>
 
-                {databases.map((db) => {
+                {databases.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-xs text-slate-400 bg-[#0d1117]/50 rounded-lg m-1 border border-dashed border-[#30363d]">
+                    <p className="font-semibold text-slate-300 mb-1">Sin bases de datos detectadas</p>
+                    <p className="text-[11px] text-slate-500">Crea una nueva base de datos o abre otro directorio.</p>
+                  </div>
+                ) : (
+                  databases.map((db) => {
                   const isSelected = db.name === activeDatabase;
                   const isRoot = db.name === '/' || db.name === 'Raíz';
 
@@ -158,7 +168,7 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
                       </div>
                     </div>
                   );
-                })}
+                }))}
 
                 {/* Actions inside dropdown */}
                 <div className="pt-1 border-t border-[#30363d]/50 space-y-0.5">

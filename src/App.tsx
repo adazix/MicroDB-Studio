@@ -191,14 +191,18 @@ export const App: React.FC = () => {
   };
 
   // Handler para crear una nueva Base de Datos
-  const handleCreateDatabase = async (dbName: string) => {
+  const handleCreateDatabase = async (dbName: string, parentDir?: string) => {
     try {
       setRelationContext(null);
-      await createDatabase(dbName);
-      setActiveDatabase(dbName);
+      const res = await createDatabase(dbName, parentDir);
+      setActiveDatabase(res.activeDatabase || dbName);
+      if (res.currentDbDirectory) {
+        setCurrentDirectory(res.currentDbDirectory);
+      }
       await loadDatabases();
       await loadTables();
-      showSuccess('Base de Datos Creada', `Se creó el directorio /${dbName} en la tarjeta SD.`);
+      const parentLabel = parentDir ? parentDir : 'la tarjeta SD';
+      showSuccess('Base de Datos Creada', `Se creó el directorio /${dbName} en ${parentLabel}.`);
     } catch (err: any) {
       showError('Error al crear base de datos', err.message);
     }
@@ -534,6 +538,7 @@ export const App: React.FC = () => {
         onClose={() => setNewDatabaseModalOpen(false)}
         onDatabaseCreated={handleCreateDatabase}
         existingDatabases={databases.map((d) => d.name)}
+        currentDirectory={currentDirectory}
       />
 
       <DBeaverBridgeModal

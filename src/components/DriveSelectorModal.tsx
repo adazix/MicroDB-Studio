@@ -16,7 +16,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { DetectedDrive } from '../types/microdb.js';
-import { fetchDrives, openDirectory } from '../utils/api.js';
+import { fetchDrives, openDirectory, browseDirectory } from '../utils/api.js';
 
 interface DriveSelectorModalProps {
   isOpen: boolean;
@@ -70,6 +70,18 @@ export const DriveSelectorModal: React.FC<DriveSelectorModalProps> = ({
       setError(err.message || 'No se pudo abrir el directorio');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBrowseFolder = async () => {
+    try {
+      const res = await browseDirectory('Seleccionar tarjeta SD o carpeta de base de datos');
+      if (!res.canceled && res.selectedPath) {
+        setCustomPath(res.selectedPath);
+        await handleOpenPath(res.selectedPath);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error abriendo diálogo de selección');
     }
   };
 
@@ -270,9 +282,19 @@ export const DriveSelectorModal: React.FC<DriveSelectorModalProps> = ({
                 />
               </div>
               <button
+                type="button"
+                onClick={handleBrowseFolder}
+                disabled={loading}
+                className="bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-slate-200 hover:text-white font-semibold text-xs px-3.5 py-2.5 rounded-xl transition-all flex items-center space-x-1.5 shrink-0 active:scale-95"
+                title="Examinar y seleccionar carpeta en tu equipo"
+              >
+                <FolderOpen className="w-4 h-4 text-sky-400" />
+                <span>Examinar...</span>
+              </button>
+              <button
                 onClick={() => handleOpenPath(customPath)}
                 disabled={loading || !customPath.trim()}
-                className="bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white font-semibold text-xs px-5 py-2.5 rounded-xl transition-all shadow-md shadow-sky-500/20 flex items-center space-x-2 shrink-0"
+                className="bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white font-semibold text-xs px-5 py-2.5 rounded-xl transition-all shadow-md shadow-sky-500/20 flex items-center space-x-2 shrink-0 active:scale-95"
               >
                 <span>Cargar</span>
                 <ArrowRight className="w-4 h-4" />

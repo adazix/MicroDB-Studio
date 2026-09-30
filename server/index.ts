@@ -18,7 +18,8 @@ import { SchemaParser } from './core/schemaParser.js';
 import { SQLiteBridge } from './core/sqliteBridge.js';
 import { Exporter } from './core/exporter.js';
 import { TableDefragmenter } from './core/defrag.js';
-import { DiskDetector, isSystemOrIgnoredDir } from './services/diskDetector.js';
+import { DiskDetector, isSystemOrIgnoredDir, isDatabaseFolder, countDatabaseTables } from './services/diskDetector.js';
+import { showNativeFolderDialog } from './services/dialogHelper.js';
 import { SDWatcherService } from './services/sdWatcher.js';
 import { TableSchema, TableSummary } from './core/microdbTypes.js';
 
@@ -46,48 +47,44 @@ interface DatabaseItem {
   tableCount: number;
 }
 
-// Función auxiliar para escanear todas las bases de datos en rootDirectory
+// Función auxiliar para escanear todas las bases de datos válidas en rootDirectory
 function scanDatabases(rootDir: string): DatabaseItem[] {
   if (!rootDir || !fs.existsSync(rootDir)) return [];
   const results: DatabaseItem[] = [];
 
   try {
     const entries = fs.readdirSync(rootDir, { withFileTypes: true });
+    const isDriveRoot = /^[a-zA-Z]:\\?$/.test(rootDir) || rootDir === '/' || rootDir === '\\';
 
     // 1. Verificar si la raíz misma contiene archivos .tbl
     const rootTblFiles = entries.filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.tbl'));
     if (rootTblFiles.length > 0) {
       results.push({
-        name: 'Principal (Raíz)',
+        name: isDriveRoot ? 'Raíz (/)' : (path.basename(rootDir) || 'Principal (Raíz)'),
         path: rootDir,
         tableCount: rootTblFiles.length
       });
     }
 
-    // 2. Escanear subdirectorios como bases de datos (ej: DB, STORE, SENSORS)
+    // 2. Escanear subdirectorios: SÓLO incluir si realmente son bases de datos MicroDB
     for (const entry of entries) {
       if (entry.isDirectory() && !isSystemOrIgnoredDir(entry.name)) {
         const subPath = path.join(rootDir, entry.name);
-        try {
-          const subFiles = fs.readdirSync(subPath);
-          const tblFiles = subFiles.filter((f) => f.toLowerCase().endsWith('.tbl'));
+        if (isDatabaseFolder(subPath)) {
           results.push({
             name: entry.name,
             path: subPath,
-            tableCount: tblFiles.length
+            tableCount: countDatabaseTables(subPath)
           });
-        } catch (e) {
-          console.warn(`No se pudo escanear el directorio ${subPath}:`, e);
         }
       }
     }
 
-    // Si no hay ninguna base de datos encontrada, sugerir "DB" por defecto
-    if (results.length === 0) {
-      const defaultDbPath = path.join(rootDir, 'DB');
+    // 3. Si se abrió una carpeta específica y no es raíz de unidad, incluirla a ella misma
+    if (results.length === 0 && !isDriveRoot && currentDbDirectory === rootDir) {
       results.push({
-        name: 'DB',
-        path: defaultDbPath,
+        name: path.basename(rootDir) || 'DB',
+        path: rootDir,
         tableCount: 0
       });
     }
@@ -444,27 +441,63 @@ app.post('/api/select-database', async (req, res) => {
   }
 });
 
-// 1.3 Crear nueva base de datos en la SD
+// 1.3 Crear nueva base de datos (priorizando la tarjeta SD si existe o permitiendo elegir carpeta)
 app.post('/api/database/create', async (req, res) => {
   try {
-    const { databaseName } = req.body;
-    if (!rootDirectory) {
-      return res.status(400).json({ success: false, error: 'No hay unidad SD abierta' });
-    }
+    let { databaseName, parentDirectory } = req.body;
     if (!databaseName || !databaseName.trim()) {
       return res.status(400).json({ success: false, error: 'Nombre de base de datos requerido' });
     }
 
     const cleanName = databaseName.trim().replace(/[^a-zA-Z0-9_-]/g, '');
-    const targetDir = path.join(rootDirectory, cleanName);
 
+    // Si no se proporcionó parentDirectory, priorizar tarjeta SD detectada
+    if (!parentDirectory || !parentDirectory.trim()) {
+      const drives = await DiskDetector.getAvailableDrives();
+      const sd = drives.find((d) => d.isSdCard || d.type === 'removable');
+      if (sd) {
+        parentDirectory = sd.letter.endsWith('\\') ? sd.letter : `${sd.letter}\\`;
+      } else if (rootDirectory) {
+        parentDirectory = rootDirectory;
+      } else if (currentDbDirectory) {
+        parentDirectory = currentDbDirectory;
+      }
+    }
+
+    if (!parentDirectory) {
+      return res.status(400).json({
+        success: false,
+        error: 'No se detectó tarjeta SD ni se especificó una carpeta de destino. Por favor selecciona una carpeta.'
+      });
+    }
+
+    const normalizedParent = path.normalize(parentDirectory);
+    if (!fs.existsSync(normalizedParent)) {
+      fs.mkdirSync(normalizedParent, { recursive: true });
+    }
+
+    const targetDir = path.join(normalizedParent, cleanName);
     if (!fs.existsSync(targetDir)) {
       fs.mkdirSync(targetDir, { recursive: true });
     }
 
+    // Crear marcador de base de datos MicroDB (.microdb) para que sea reconocida inmediatamente
+    const markerPath = path.join(targetDir, '.microdb');
+    if (!fs.existsSync(markerPath)) {
+      try {
+        fs.writeFileSync(
+          markerPath,
+          JSON.stringify({ name: cleanName, createdAt: new Date().toISOString() }, null, 2),
+          'utf8'
+        );
+      } catch (e) { }
+    }
+
+    rootDirectory = normalizedParent;
     currentDatabase = cleanName;
     currentDbDirectory = targetDir;
     loadSchemasFromDisk(currentDbDirectory);
+    sdWatcher.watchDirectory(rootDirectory);
     const sqlitePath = await SQLiteBridge.syncFolderToSqlite(currentDbDirectory, schemas);
 
     res.json({
@@ -475,9 +508,28 @@ app.post('/api/database/create', async (req, res) => {
         tableCount: 0
       },
       currentDbDirectory,
+      rootDirectory,
       sqlitePath,
       activeDatabase: cleanName,
-      message: `Base de datos '${cleanName}' creada exitosamente en la SD`
+      message: `Base de datos '${cleanName}' creada exitosamente en ${normalizedParent}`
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 1.3.1 Abrir diálogo nativo del explorador para seleccionar carpeta o tarjeta SD
+app.post('/api/browse-directory', async (req, res) => {
+  try {
+    const { title } = req.body;
+    const selectedPath = await showNativeFolderDialog(title || 'Seleccionar carpeta o tarjeta SD');
+    if (!selectedPath) {
+      return res.json({ success: true, canceled: true });
+    }
+    res.json({
+      success: true,
+      canceled: false,
+      selectedPath: path.normalize(selectedPath)
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -558,25 +610,33 @@ app.post('/api/open-directory', async (req, res) => {
       currentDbDirectory = currentDatabase === 'Principal (Raíz)' || currentDatabase === 'Raíz (/)' || currentDatabase === '/'
         ? rootDirectory
         : path.join(rootDirectory, currentDatabase);
-    } else if (hasTblDirectly && parentDir && parentDir !== normalized && fs.existsSync(parentDir)) {
-      // El usuario seleccionó directamente una subcarpeta de BD (ej: E:\DB_MULTI)
-      rootDirectory = parentDir;
-      currentDatabase = folderName;
-      currentDbDirectory = normalized;
     } else {
-      // Podría ser una carpeta con múltiples bases de datos
-      const subDbs = scanDatabases(normalized);
-      const subWithTables = subDbs.find((d) => d.tableCount > 0);
-      if (subDbs.length > 1 || (subWithTables && subWithTables.name !== 'Principal (Raíz)' && subWithTables.name !== 'Raíz (/)')) {
+      // El usuario abrió una carpeta específica.
+      // Comprobamos si tiene subcarpetas que sean bases de datos MicroDB reales.
+      const subEntries = fs.readdirSync(normalized, { withFileTypes: true });
+      const databaseSubfolders = subEntries.filter(
+        (e) => e.isDirectory() && !isSystemOrIgnoredDir(e.name) && isDatabaseFolder(path.join(normalized, e.name))
+      );
+
+      if (databaseSubfolders.length > 0) {
+        // La carpeta seleccionada contiene múltiples bases de datos reales en sus subcarpetas
         rootDirectory = normalized;
-        currentDatabase = subWithTables ? subWithTables.name : subDbs[0].name;
-        currentDbDirectory = currentDatabase === 'Principal (Raíz)' || currentDatabase === 'Raíz (/)' || currentDatabase === '/'
-          ? rootDirectory
-          : path.join(rootDirectory, currentDatabase);
+        const subWithTables = databaseSubfolders.find((e) => countDatabaseTables(path.join(normalized, e.name)) > 0);
+        currentDatabase = subWithTables ? subWithTables.name : databaseSubfolders[0].name;
+        currentDbDirectory = path.join(rootDirectory, currentDatabase);
       } else {
+        // La carpeta seleccionada es ELLA MISMA la base de datos abierta directamente
         rootDirectory = parentDir && parentDir !== normalized ? parentDir : normalized;
         currentDatabase = folderName || 'DB';
         currentDbDirectory = normalized;
+
+        // Si no tiene tablas ni marcador, crear marcador para que sea identificada como base de datos MicroDB
+        const markerPath = path.join(normalized, '.microdb');
+        if (!fs.existsSync(markerPath) && !hasTblDirectly) {
+          try {
+            fs.writeFileSync(markerPath, JSON.stringify({ name: currentDatabase, createdAt: new Date().toISOString() }, null, 2), 'utf8');
+          } catch { }
+        }
       }
     }
 

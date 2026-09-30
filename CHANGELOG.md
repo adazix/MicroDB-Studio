@@ -5,6 +5,20 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [1.1.1] - 2026-09-30
+
+### 🛡️ Corrección de Errores y Validaciones
+- **Detección Estricta de Bases de Datos:** Se corrigió el problema por el cual carpetas del sistema u otros subdirectorios no relacionados (como fotos, backups o descargas) eran detectados erróneamente como bases de datos con 0 tablas. Ahora el motor valida la presencia de artefactos legítimos de MicroDB (`.tbl`, `.jsn`, `.schema.json`, `.sch`, `.idx` o el archivo de marca `.microdb`).
+- **Filtrado de Directorios del Sistema:** Se ignoran sistemáticamente carpetas protegidas y de sistema de Windows (`System Volume Information`, `$RECYCLE.BIN`, `Windows`, `Program Files`, `ProgramData`, `.git`, `node_modules`, etc.).
+- **Manejo de Estado Vacío:** La interfaz lateral y el selector de bases de datos ahora indican claramente cuando un directorio no contiene bases de datos en lugar de mostrar registros vacíos o erróneos.
+
+### 🚀 Nuevas Funcionalidades
+- **Priorización Automática de Tarjetas SD:** Al abrir el diálogo de creación de nueva base de datos (*Nueva BD*), el sistema prioriza y preselecciona automáticamente la unidad de tarjeta SD detectada (`E:\`, etc.).
+- **Selector / Explorador Nativo de Directorios ("Examinar..."):** Se integró un botón de exploración de carpetas nativo de Windows (mediante diálogos del sistema) tanto en el modal de nueva base de datos como en el selector de unidades manuales. Permite al usuario seleccionar cualquier carpeta en el disco sin tener que escribir la ruta a mano.
+- **Creación Inmediata con Marcador `.microdb`:** Al crear una base de datos nueva vacía, se inicializa con un archivo de firma `.microdb`, permitiendo que sea reconocida instantáneamente por el explorador antes de crear la primera tabla.
+
+---
+
 ## [1.1.0] - 2026-09-24
 
 ### 🚀 Añadido
