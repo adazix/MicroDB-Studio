@@ -17,7 +17,9 @@
     "desktop:dev": "concurrently \"pnpm dev:server\" \"wait-on http://localhost:3001 && electron electron/main.cjs\"",
     "desktop:start": "pnpm build && electron electron/main.cjs",
     "dist:win": "pnpm build && electron-builder --win",
-    "dist:portable": "pnpm build && electron-builder --win portable"
+    "dist:portable": "pnpm build && electron-builder --win portable",
+    "release": "node scripts/release.mjs",
+    "release:check": "node scripts/release.mjs check"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
