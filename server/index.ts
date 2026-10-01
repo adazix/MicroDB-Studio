@@ -55,18 +55,19 @@ function scanDatabases(rootDir: string): DatabaseItem[] {
   try {
     const entries = fs.readdirSync(rootDir, { withFileTypes: true });
     const isDriveRoot = /^[a-zA-Z]:\\?$/.test(rootDir) || rootDir === '/' || rootDir === '\\';
+    const rootName = isDriveRoot ? 'Raíz (/)' : (path.basename(rootDir) || 'Principal (Raíz)');
 
     // 1. Verificar si la raíz misma contiene archivos .tbl
     const rootTblFiles = entries.filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.tbl'));
     if (rootTblFiles.length > 0) {
       results.push({
-        name: isDriveRoot ? 'Raíz (/)' : (path.basename(rootDir) || 'Principal (Raíz)'),
+        name: rootName,
         path: rootDir,
         tableCount: rootTblFiles.length
       });
     }
 
-    // 2. Escanear subdirectorios: SÓLO incluir si realmente son bases de datos MicroDB
+    // 2. Escanear subdirectorios: incluir si son carpetas de base de datos MicroDB
     for (const entry of entries) {
       if (entry.isDirectory() && !isSystemOrIgnoredDir(entry.name)) {
         const subPath = path.join(rootDir, entry.name);
@@ -80,12 +81,12 @@ function scanDatabases(rootDir: string): DatabaseItem[] {
       }
     }
 
-    // 3. Si se abrió una carpeta específica y no es raíz de unidad, incluirla a ella misma SÓLO si es una carpeta de base de datos válida
-    if (results.length === 0 && !isDriveRoot && isDatabaseFolder(rootDir)) {
+    // 3. Garantizar que la raíz abierta siempre aparezca en la lista si no hay subcarpetas de BD
+    if (results.length === 0) {
       results.push({
-        name: path.basename(rootDir),
+        name: rootName,
         path: rootDir,
-        tableCount: countDatabaseTables(rootDir)
+        tableCount: rootTblFiles.length
       });
     }
   } catch (e) {
@@ -94,6 +95,7 @@ function scanDatabases(rootDir: string): DatabaseItem[] {
 
   return results;
 }
+
 
 // Helper para localizar el archivo .tbl de una tabla de forma insensible a mayúsculas/minúsculas
 function getTableFileInfo(dirPath: string | null, tableNameParam: string): { tableName: string; tablePath: string } | null {
@@ -147,26 +149,25 @@ function findSchemaForTable(dirPath: string | null, tableName: string, header?: 
     try {
       const files = fs.readdirSync(dirPath);
 
-      // Prioridad 1: Archivos .jsn y .json de catálogo de Arduino / Studio
+      // Prioridad 1: Archivos .jsn y .json de catálogo de Arduino MicroDB
       for (const f of files) {
         const fLower = f.toLowerCase();
-        const base = f.replace(/\.(jsn|json|schema\.json)$/i, '').toLowerCase();
-        if (base === lower) {
-          try {
-            const content = fs.readFileSync(path.join(dirPath, f), 'utf8');
-            const parsed = JSON.parse(content);
-            const converted = fLower.endsWith('.schema.json')
-              ? parsed
-              : SchemaParser.parseArduinoJsonSchema(parsed);
-
-            if (converted) {
-              schemas.set(lower, converted);
-              schemas.set(upper, converted);
-              schemas.set(cleanName, converted);
-              return converted;
+        if (fLower.endsWith('.jsn') || fLower.endsWith('.json')) {
+          const base = f.replace(/\.(jsn|json)$/i, '').toLowerCase();
+          if (base === lower) {
+            try {
+              const content = fs.readFileSync(path.join(dirPath, f), 'utf8');
+              const parsed = JSON.parse(content);
+              const converted = SchemaParser.parseArduinoJsonSchema(parsed);
+              if (converted) {
+                schemas.set(lower, converted);
+                schemas.set(upper, converted);
+                schemas.set(cleanName, converted);
+                return converted;
+              }
+            } catch (e) {
+              console.error(`Error leyendo esquema ${f}:`, e);
             }
-          } catch (e) {
-            console.error(`Error leyendo esquema ${f}:`, e);
           }
         }
       }
@@ -206,25 +207,16 @@ function findSchemaForTable(dirPath: string | null, tableName: string, header?: 
   };
 }
 
-// Cargar esquemas guardados en disco (.jsn, .json, .schema.json y .sch)
+// Cargar esquemas guardados en disco (.jsn, .json y .sch)
 function loadSchemasFromDisk(dirPath: string) {
   schemas.clear();
   try {
     const files = fs.readdirSync(dirPath);
 
-    // PASO 1: Cargar todos los archivos .jsn, .json y .schema.json (MÁXIMA PRIORIDAD)
+    // PASO 1: Cargar archivos .jsn / .json de Arduino MicroDB
     for (const f of files) {
       const lower = f.toLowerCase();
-      if (lower.endsWith('.schema.json')) {
-        const tableName = f.replace(/\.schema\.json$/i, '');
-        try {
-          const content = fs.readFileSync(path.join(dirPath, f), 'utf8');
-          const parsed = JSON.parse(content);
-          schemas.set(tableName.toLowerCase(), parsed);
-          schemas.set(tableName.toUpperCase(), parsed);
-          schemas.set(tableName, parsed);
-        } catch (e) { }
-      } else if (lower.endsWith('.jsn') || (lower.endsWith('.json') && !lower.endsWith('.schema.json'))) {
+      if (lower.endsWith('.jsn') || lower.endsWith('.json')) {
         const tableName = f.replace(/\.(json|jsn)$/i, '');
         try {
           const content = fs.readFileSync(path.join(dirPath, f), 'utf8');
@@ -347,16 +339,19 @@ function validateUniqueConstraints(
   }
 }
 
-// Guardar esquema en disco (tanto .schema.json como .jsn para Arduino)
+// Guardar esquema en disco exclusivamente en formato de catálogo de Arduino MicroDB (.jsn y .JSN)
 function saveSchemaToDisk(dirPath: string, schema: TableSchema) {
   schemas.set(schema.tableName, schema);
   schemas.set(schema.tableName.toLowerCase(), schema);
+  schemas.set(schema.tableName.toUpperCase(), schema);
 
-  // 1. Guardar .schema.json de MicroDB Studio
-  const schemaFile = path.join(dirPath, `${schema.tableName}.schema.json`);
-  fs.writeFileSync(schemaFile, JSON.stringify(schema, null, 2), 'utf8');
+  // Si existe un .schema.json de versiones anteriores, eliminarlo para no duplicar archivos
+  const legacySchemaFile = path.join(dirPath, `${schema.tableName}.schema.json`);
+  if (fs.existsSync(legacySchemaFile)) {
+    try { fs.unlinkSync(legacySchemaFile); } catch (e) { }
+  }
 
-  // 2. Guardar .jsn para Arduino MicroDB (FAT 8.3)
+  // Guardar archivo .jsn y .JSN para Arduino MicroDB
   try {
     const arduinoJson = SchemaParser.toArduinoJsonSchema(schema);
     const jsnFile = path.join(dirPath, `${schema.tableName}.jsn`);
@@ -523,8 +518,8 @@ app.post('/api/database/create', async (req, res) => {
 // 1.3.1 Abrir diálogo nativo del explorador para seleccionar carpeta o tarjeta SD
 app.post('/api/browse-directory', async (req, res) => {
   try {
-    const { title } = req.body;
-    const selectedPath = await showNativeFolderDialog(title || 'Seleccionar carpeta o tarjeta SD');
+    const { title, initialPath } = req.body;
+    const selectedPath = await showNativeFolderDialog(title || 'Seleccionar carpeta o tarjeta SD', initialPath);
     if (!selectedPath) {
       return res.json({ success: true, canceled: true });
     }
@@ -787,58 +782,54 @@ app.post('/api/open-directory', async (req, res) => {
 
     const normalized = path.normalize(dirPath);
 
-    // Si no existe, no intentar crearlo automáticamente
     if (!fs.existsSync(normalized)) {
       return res.status(400).json({ success: false, error: `Directorio no válido o inaccesible: ${normalized}` });
     }
 
     const isDriveRoot = /^[a-zA-Z]:\\?$/.test(normalized) || normalized === '/' || normalized === '\\';
-    const files = fs.readdirSync(normalized);
-    const hasTblDirectly = files.some((f) => f.toLowerCase().endsWith('.tbl'));
     const parentDir = path.dirname(normalized);
     const folderName = path.basename(normalized);
 
     if (isDriveRoot) {
-      // El usuario seleccionó la raíz de la unidad (ej: E:\ o D:\)
       rootDirectory = normalized;
       const dbs = scanDatabases(rootDirectory);
-      if (dbs.length > 0) {
-        const dbWithTables = dbs.find((d) => d.tableCount > 0);
-        currentDatabase = dbWithTables ? dbWithTables.name : dbs[0].name;
-        currentDbDirectory = currentDatabase === 'Principal (Raíz)' || currentDatabase === 'Raíz (/)' || currentDatabase === '/'
-          ? rootDirectory
-          : path.join(rootDirectory, currentDatabase);
-      } else {
-        // La unidad no contiene bases de datos todavía. NO crear nada automáticamente.
-        currentDatabase = '';
-        currentDbDirectory = null;
-      }
+      const dbWithTables = dbs.find((d) => d.tableCount > 0);
+      const selectedDb = dbWithTables || dbs[0];
+      currentDatabase = selectedDb ? selectedDb.name : 'Raíz (/)';
+      currentDbDirectory = selectedDb ? selectedDb.path : rootDirectory;
     } else {
-      // El usuario abrió una carpeta específica.
-      // Comprobamos si tiene subcarpetas que sean bases de datos MicroDB reales.
       const subEntries = fs.readdirSync(normalized, { withFileTypes: true });
       const databaseSubfolders = subEntries.filter(
         (e) => e.isDirectory() && !isSystemOrIgnoredDir(e.name) && isDatabaseFolder(path.join(normalized, e.name))
       );
 
       if (databaseSubfolders.length > 0) {
-        // La carpeta seleccionada contiene múltiples bases de datos reales en sus subcarpetas
+        // La carpeta seleccionada contiene múltiples bases de datos dentro de ella
         rootDirectory = normalized;
         const subWithTables = databaseSubfolders.find((e) => countDatabaseTables(path.join(normalized, e.name)) > 0);
         currentDatabase = subWithTables ? subWithTables.name : databaseSubfolders[0].name;
         currentDbDirectory = path.join(rootDirectory, currentDatabase);
-      } else if (hasTblDirectly || isDatabaseFolder(normalized)) {
-        // La carpeta seleccionada es ELLA MISMA una base de datos MicroDB legítima existente
-        const isParentDrive = /^[a-zA-Z]:\\?$/.test(parentDir) || parentDir === '/' || parentDir === '\\';
-        rootDirectory = isParentDrive ? normalized : (parentDir || normalized);
-        currentDatabase = folderName;
-        currentDbDirectory = normalized;
       } else {
-        // Carpeta ordinaria o vacía. NO creamos .microdb, NO creamos carpetas 'DB' en automático.
-        rootDirectory = normalized;
-        currentDatabase = '';
-        currentDbDirectory = null;
+        // La carpeta seleccionada es directamente una base de datos (o contiene tablas .tbl)
+        // Si el directorio padre existe (ej. la unidad E:\ o una carpeta contenedora de proyectos),
+        // establecemos rootDirectory como el directorio padre para que todas las demás bases de datos
+        // hermanas de la unidad/carpeta estén disponibles en el selector.
+        if (parentDir && fs.existsSync(parentDir)) {
+          rootDirectory = parentDir;
+          currentDatabase = folderName || 'DB';
+          currentDbDirectory = normalized;
+        } else {
+          rootDirectory = normalized;
+          currentDatabase = folderName || 'DB';
+          currentDbDirectory = normalized;
+        }
       }
+    }
+
+    if (currentDbDirectory && !fs.existsSync(currentDbDirectory)) {
+      try {
+        fs.mkdirSync(currentDbDirectory, { recursive: true });
+      } catch { }
     }
 
     let sqlitePath: string | null = null;
@@ -853,7 +844,7 @@ app.post('/api/open-directory', async (req, res) => {
       schemas.clear();
     }
 
-    sdWatcher.watchDirectory(rootDirectory); // Observar toda la SD recursivamente
+    sdWatcher.watchDirectory(rootDirectory);
 
     res.json({
       success: true,
@@ -861,9 +852,7 @@ app.post('/api/open-directory', async (req, res) => {
       activeDatabase: currentDatabase,
       currentDbDirectory,
       sqlitePath,
-      message: currentDatabase
-        ? `Directorio abierto correctamente. Base de datos activa: '${currentDatabase}'`
-        : `Directorio abierto correctamente. Sin bases de datos preexistentes.`
+      message: `Directorio abierto correctamente. Base de datos activa: '${currentDatabase}'`
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -1030,7 +1019,108 @@ app.put('/api/table/:name/record/:slotIndex', async (req, res) => {
   }
 });
 
-// 7. Borrar registro lógicamente (Tombstone O(1))
+// Auxiliar para escanear dependencias relacionales de un registro en otras tablas (Foreign Keys)
+interface RecordDependencyItem {
+  tableName: string;
+  tablePath: string;
+  fkField: string;
+  matchingCount: number;
+  matchingSlots: { slotIndex: number; recordId: number }[];
+}
+
+function findRecordDependencies(
+  dirPath: string,
+  parentTableName: string,
+  targetRecordId: number
+): RecordDependencyItem[] {
+  const dependencies: RecordDependencyItem[] = [];
+  const parentNameLower = parentTableName.toLowerCase();
+
+  try {
+    const files = fs.readdirSync(dirPath);
+    const tblFiles = files.filter((f) => f.toLowerCase().endsWith('.tbl'));
+
+    for (const tblFile of tblFiles) {
+      const childTableName = path.basename(tblFile, path.extname(tblFile));
+      if (childTableName.toLowerCase() === parentNameLower) continue;
+
+      const childTablePath = path.join(dirPath, tblFile);
+      const childHeader = MicroDBEngine.readTableHeader(childTablePath);
+      const childSchema = findSchemaForTable(dirPath, childTableName, childHeader);
+
+      for (const field of childSchema.fields) {
+        if (
+          field.isForeignKey &&
+          field.referencesTable &&
+          field.referencesTable.toLowerCase() === parentNameLower
+        ) {
+          const { records } = MicroDBEngine.readAllSlots(childTablePath, childSchema);
+          const matchingSlots: { slotIndex: number; recordId: number }[] = [];
+
+          for (const r of records) {
+            if (r._status !== 1) continue;
+            const fkVal = r[field.name];
+            if (fkVal !== undefined && fkVal !== null && Number(fkVal) === Number(targetRecordId)) {
+              matchingSlots.push({ slotIndex: r._slotIndex, recordId: r._recordId });
+            }
+          }
+
+          if (matchingSlots.length > 0) {
+            dependencies.push({
+              tableName: childTableName,
+              tablePath: childTablePath,
+              fkField: field.name,
+              matchingCount: matchingSlots.length,
+              matchingSlots
+            });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error escaneando dependencias relacionales:', err);
+  }
+
+  return dependencies;
+}
+
+// 6.1 Verificar dependencias de un registro antes de borrar
+app.post('/api/table/:name/record/:slotIndex/check-dependencies', (req, res) => {
+  try {
+    if (!currentDbDirectory) return res.status(400).json({ success: false, error: 'No hay directorio abierto' });
+
+    const fileInfo = getTableFileInfo(currentDbDirectory, req.params.name);
+    if (!fileInfo) return res.status(404).json({ success: false, error: `Tabla '${req.params.name}' no encontrada` });
+
+    const slotIndex = Number.parseInt(req.params.slotIndex, 10);
+    const header = MicroDBEngine.readTableHeader(fileInfo.tablePath);
+    const schema = findSchemaForTable(currentDbDirectory, fileInfo.tableName, header);
+    const { records } = MicroDBEngine.readAllSlots(fileInfo.tablePath, schema);
+
+    const targetRecord = records.find((r) => r._slotIndex === slotIndex && r._status === 1);
+    if (!targetRecord) {
+      return res.status(404).json({ success: false, error: 'Registro no encontrado o ya está borrado' });
+    }
+
+    const targetRecordId = targetRecord._recordId || targetRecord.id || slotIndex + 1;
+    const dependencies = findRecordDependencies(currentDbDirectory, fileInfo.tableName, targetRecordId);
+    const totalDependentRecords = dependencies.reduce((sum, d) => sum + d.matchingCount, 0);
+
+    res.json({
+      success: true,
+      hasDependencies: dependencies.length > 0,
+      targetRecordId,
+      tableName: fileInfo.tableName,
+      slotIndex,
+      totalDependentRecords,
+      dependencies
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 7. Borrar registro lógicamente (con soporte para Cascada / Set Null en Relaciones)
 app.delete('/api/table/:name/record/:slotIndex', async (req, res) => {
   try {
     if (!currentDbDirectory) return res.status(400).json({ success: false, error: 'No hay directorio abierto' });
@@ -1040,16 +1130,66 @@ app.delete('/api/table/:name/record/:slotIndex', async (req, res) => {
       return res.status(404).json({ success: false, error: `Tabla '${req.params.name}' no encontrada` });
     }
 
-    const { tablePath } = fileInfo;
+    const { tableName, tablePath } = fileInfo;
     const slotIndex = Number.parseInt(req.params.slotIndex, 10);
+    const action = ((req.query.action || req.body.action || 'restrict') as string).toLowerCase() as 'restrict' | 'cascade' | 'set_null';
 
-    const deleted = MicroDBEngine.deleteRecord(tablePath, slotIndex);
-    if (!deleted) {
+    const header = MicroDBEngine.readTableHeader(tablePath);
+    const schema = findSchemaForTable(currentDbDirectory, tableName, header);
+    const { records } = MicroDBEngine.readAllSlots(tablePath, schema);
+
+    const targetRecord = records.find((r) => r._slotIndex === slotIndex && r._status === 1);
+    if (!targetRecord) {
       return res.status(400).json({ success: false, error: 'El registro ya estaba borrado o índice inválido' });
     }
 
+    const targetRecordId = targetRecord._recordId || targetRecord.id || slotIndex + 1;
+    const dependencies = findRecordDependencies(currentDbDirectory, tableName, targetRecordId);
+
+    if (dependencies.length > 0) {
+      if (action === 'restrict') {
+        return res.status(400).json({
+          success: false,
+          error: `[Restricción Referencial] El registro #${targetRecordId} tiene ${dependencies.reduce((sum, d) => sum + d.matchingCount, 0)} referencias vinculadas en otras tablas.`,
+          hasDependencies: true,
+          dependencies
+        });
+      } else if (action === 'cascade') {
+        for (const dep of dependencies) {
+          for (const match of dep.matchingSlots) {
+            MicroDBEngine.deleteRecord(dep.tablePath, match.slotIndex);
+          }
+        }
+      } else if (action === 'set_null') {
+        for (const dep of dependencies) {
+          const depHeader = MicroDBEngine.readTableHeader(dep.tablePath);
+          const depSchema = findSchemaForTable(currentDbDirectory, dep.tableName, depHeader);
+          const { records: depRecords } = MicroDBEngine.readAllSlots(dep.tablePath, depSchema);
+
+          for (const match of dep.matchingSlots) {
+            const childRec = depRecords.find((r) => r._slotIndex === match.slotIndex);
+            if (childRec) {
+              const updatedRec = { ...childRec, [dep.fkField]: 0 };
+              MicroDBEngine.updateRecord(dep.tablePath, match.slotIndex, updatedRec, depSchema);
+            }
+          }
+        }
+      }
+    }
+
+    const deleted = MicroDBEngine.deleteRecord(tablePath, slotIndex);
+    if (!deleted) {
+      return res.status(400).json({ success: false, error: 'No se pudo borrar el registro principal' });
+    }
+
     await SQLiteBridge.syncFolderToSqlite(currentDbDirectory, schemas);
-    res.json({ success: true, message: 'Registro marcado como borrado y encolado en la Free-List' });
+    res.json({
+      success: true,
+      actionApplied: action,
+      message: dependencies.length > 0
+        ? `Registro #${targetRecordId} eliminado (${action === 'cascade' ? 'Cascada efectuada' : 'FK asignado a 0'})`
+        : 'Registro marcado como borrado y encolado en la Free-List'
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1066,9 +1206,21 @@ app.post('/api/table/:name/vacuum', async (req, res) => {
     }
 
     const { tableName, tablePath } = fileInfo;
+    const header = MicroDBEngine.readTableHeader(tablePath);
+    if (header.deletedRecords === 0) {
+      return res.json({
+        success: true,
+        result: {
+          reclaimedBytes: 0,
+          initialSlots: header.totalSlots,
+          finalSlots: header.totalSlots
+        },
+        message: 'La tabla ya se encuentra 100% compactada (no contiene registros borrados).'
+      });
+    }
+
     let schema = schemas.get(tableName) || schemas.get(tableName.toLowerCase());
     if (!schema) {
-      const header = MicroDBEngine.readTableHeader(tablePath);
       schema = MicroDBEngine.generateDefaultSchema(header, tableName);
     }
 
@@ -1147,10 +1299,10 @@ app.post('/api/table/create', async (req, res) => {
     const { tableName, schema } = req.body;
     if (!tableName) return res.status(400).json({ success: false, error: 'Nombre de tabla requerido' });
 
-    const cleanName = tableName.replace(/\.tbl$/i, '');
+    const cleanName = tableName.trim().replace(/\.tbl$/i, '').toUpperCase();
     const tablePath = path.join(currentDbDirectory, `${cleanName}.tbl`);
     if (fs.existsSync(tablePath)) {
-      return res.status(400).json({ success: false, error: 'La tabla ya existe' });
+      return res.status(400).json({ success: false, error: `La tabla '${cleanName}' ya existe` });
     }
 
     const finalSchema = schema || {
@@ -1158,6 +1310,19 @@ app.post('/api/table/create', async (req, res) => {
       recordSize: 32,
       fields: []
     };
+    finalSchema.tableName = cleanName;
+
+    // Validar nombres de campos reservados
+    const reservedNames = ['id', '_id', '_recordid', '_slotindex', '_status', '_nextfreeslot'];
+    for (const f of finalSchema.fields || []) {
+      const lower = (f.name || '').trim().toLowerCase();
+      if (reservedNames.includes(lower)) {
+        return res.status(400).json({
+          success: false,
+          error: `El nombre de columna '${f.name}' está reservado por MicroDB. El motor binario ya gestiona automáticamente la Clave Primaria 'ID' autoincremental en la cabecera de cada slot.`
+        });
+      }
+    }
 
     MicroDBEngine.createTable(tablePath, finalSchema.recordSize);
     saveSchemaToDisk(currentDbDirectory, finalSchema);
@@ -1175,8 +1340,9 @@ app.post('/api/schema/parse-cpp', (req, res) => {
     const { code, tableName } = req.body;
     if (!code) return res.status(400).json({ success: false, error: 'Código C++ no proporcionado' });
 
-    const cleanName = (tableName || 'unnamed').replace(/\.tbl$/i, '');
+    const cleanName = (tableName || 'unnamed').trim().replace(/\.tbl$/i, '').toUpperCase();
     const parsedSchema = SchemaParser.parseCppStruct(code, cleanName);
+    parsedSchema.tableName = cleanName;
     res.json({ success: true, schema: parsedSchema });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -1211,21 +1377,77 @@ app.post('/api/schema/auto-detect/:name', async (req, res) => {
   }
 });
 
-// 11. Guardar esquema
+// 11. Guardar y actualizar estructura / esquema de tabla
 app.post('/api/schema/save', async (req, res) => {
   try {
     if (!currentDbDirectory) return res.status(400).json({ success: false, error: 'No hay directorio abierto' });
 
     const { schema } = req.body;
     if (!schema?.tableName) {
-      return res.status(400).json({ success: false, error: 'Esquema no válido' });
+      return res.status(400).json({ success: false, error: 'Esquema no válido o falta tableName' });
     }
 
-    schema.tableName = schema.tableName.replace(/\.tbl$/i, '');
-    saveSchemaToDisk(currentDbDirectory, schema);
+    const cleanTableName = schema.tableName.replace(/\.tbl$/i, '').trim();
+
+    // Validar columnas
+    const reservedNames = ['id', '_id', '_recordid', '_slotindex', '_status', '_nextfreeslot'];
+    const fields = schema.fields || [];
+
+    for (const f of fields) {
+      const fieldName = (f.name || '').trim();
+      if (!fieldName) {
+        return res.status(400).json({ success: false, error: 'Todas las columnas deben tener un nombre válido.' });
+      }
+      if (reservedNames.includes(fieldName.toLowerCase())) {
+        return res.status(400).json({
+          success: false,
+          error: `El nombre de columna '${fieldName}' está reservado por MicroDB. El motor binario ya gestiona automáticamente la Clave Primaria 'ID' autoincremental en la cabecera de cada slot.`
+        });
+      }
+    }
+
+    const fieldNames = fields.map((f: any) => f.name.trim().toLowerCase());
+    if (new Set(fieldNames).size !== fieldNames.length) {
+      return res.status(400).json({ success: false, error: 'Existen columnas con nombres duplicados.' });
+    }
+
+    // Recalcular offsets y tamaño total
+    let offset = 0;
+    const computedFields = fields.map((f: any) => {
+      const typeInfo = SchemaParser.getTypeInfo(f.type);
+      const base = typeInfo ? typeInfo.baseSize : (f.byteSize || 1);
+      const totalByteSize = f.arrayLength && f.arrayLength > 0 ? base * f.arrayLength : (f.byteSize || base);
+      const res = { ...f, name: f.name.trim(), offset, byteSize: totalByteSize };
+      offset += totalByteSize;
+      return res;
+    });
+
+    const calculatedRecordSize = offset > 0 ? offset : 32;
+    const finalSchema: TableSchema = {
+      tableName: cleanTableName,
+      recordSize: calculatedRecordSize,
+      fields: computedFields
+    };
+
+    // Actualizar archivo binario .tbl y migrar si existe
+    const fileInfo = getTableFileInfo(currentDbDirectory, cleanTableName);
+    let migrationResult = { migratedSlots: 0, previousRecordSize: calculatedRecordSize, newRecordSize: calculatedRecordSize };
+
+    if (fileInfo && fs.existsSync(fileInfo.tablePath)) {
+      const oldHeader = MicroDBEngine.readTableHeader(fileInfo.tablePath);
+      const oldSchema = findSchemaForTable(currentDbDirectory, cleanTableName, oldHeader);
+      migrationResult = TableDefragmenter.alterTableSchema(fileInfo.tablePath, oldSchema, finalSchema);
+    }
+
+    saveSchemaToDisk(currentDbDirectory, finalSchema);
     await SQLiteBridge.syncFolderToSqlite(currentDbDirectory, schemas);
 
-    res.json({ success: true, message: `Esquema de '${schema.tableName}' guardado con éxito` });
+    res.json({
+      success: true,
+      message: `Estructura de '${cleanTableName}' actualizada con éxito (${finalSchema.fields.length} columnas, ${finalSchema.recordSize} bytes)`,
+      schema: finalSchema,
+      migration: migrationResult
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

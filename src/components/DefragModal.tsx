@@ -88,6 +88,15 @@ export const DefragModal: React.FC<DefragModalProps> = ({
             </div>
           )}
 
+          {!result && deletedRecordsCount === 0 && (
+            <div className="p-3 bg-sky-500/10 border border-sky-500/30 rounded-xl text-xs text-sky-300 flex items-center space-x-2.5">
+              <CheckCircle2 className="w-4 h-4 text-sky-400 shrink-0" />
+              <span>
+                Esta tabla ya se encuentra 100% compactada. No hay registros borrados en la Free-List para liberar.
+              </span>
+            </div>
+          )}
+
           {result ? (
             <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-2">
               <div className="flex items-center space-x-2 text-emerald-400 font-bold text-xs">
@@ -121,8 +130,12 @@ export const DefragModal: React.FC<DefragModalProps> = ({
           {!result && (
             <button
               onClick={handleVacuum}
-              disabled={loading}
-              className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center space-x-2"
+              disabled={loading || deletedRecordsCount === 0}
+              className={`text-xs px-5 py-2.5 rounded-xl font-bold flex items-center space-x-2 transition-all ${
+                deletedRecordsCount === 0
+                  ? 'bg-[#21262d] text-slate-500 border border-[#30363d] cursor-not-allowed opacity-50'
+                  : 'bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 shadow-md shadow-amber-500/20 active:scale-95'
+              }`}
             >
               <Zap className="w-4 h-4" />
               <span>{loading ? 'Compactando...' : 'Iniciar Vacuum'}</span>

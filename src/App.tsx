@@ -16,19 +16,23 @@ import { HexInspectorModal } from './components/HexInspectorModal.js';
 import { DefragModal } from './components/DefragModal.js';
 import { NewTableModal } from './components/NewTableModal.js';
 import { NewDatabaseModal } from './components/NewDatabaseModal.js';
+import { DeleteDependencyModal } from './components/DeleteDependencyModal.js';
+import { EditTableSchemaModal } from './components/EditTableSchemaModal.js';
 
 import {
   TableSummary,
   TableSchema,
   TableHeaderData,
   DecodedRecord,
-  DatabaseInfo
+  DatabaseInfo,
+  CheckDependenciesResult
 } from './types/microdb.js';
 
 import {
   fetchTables,
   fetchTableDetail,
   deleteRecord,
+  checkRecordDependencies,
   dropTable,
   fetchDatabases,
   selectDatabase,
@@ -49,6 +53,7 @@ export const App: React.FC = () => {
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
   const [activeDatabase, setActiveDatabase] = useState<string>('/');
   const [currentDirectory, setCurrentDirectory] = useState<string | null>(null);
+  const [rootDirectory, setRootDirectory] = useState<string | null>(null);
 
   // Main table state
   const [tables, setTables] = useState<TableSummary[]>([]);
@@ -77,12 +82,30 @@ export const App: React.FC = () => {
   const [vacuumModalOpen, setVacuumModalOpen] = useState(false);
   const [vacuumTargetTable, setVacuumTargetTable] = useState<string | null>(null);
 
+  // Modal de advertencia de integridad referencial
+  const [dependencyModalOpen, setDependencyModalOpen] = useState(false);
+  const [dependencyInfo, setDependencyInfo] = useState<CheckDependenciesResult | null>(null);
+  const [pendingDeleteSlot, setPendingDeleteSlot] = useState<number | null>(null);
+
+  // Modal de gestión de columnas y esquema
+  const [schemaModalOpen, setSchemaModalOpen] = useState(false);
+  const [schemaModalTable, setSchemaModalTable] = useState<string | null>(null);
+
+  const handleOpenSchemaModal = (tName: string) => {
+    setSchemaModalTable(tName);
+    if (tName !== selectedTableName) {
+      loadTableDetail(tName);
+    }
+    setSchemaModalOpen(true);
+  };
+
   // Cargar lista de bases de datos
   const loadDatabases = useCallback(async () => {
     try {
       const data = await fetchDatabases();
       setDatabases(data.databases);
       setActiveDatabase(data.activeDatabase || '/');
+      setRootDirectory(data.rootDirectory);
       setCurrentDirectory(data.currentDbDirectory || data.rootDirectory);
     } catch (err) {
       console.error('Error fetching databases:', err);
@@ -177,17 +200,29 @@ export const App: React.FC = () => {
 
   // Handler para cambiar de Base de Datos
   const handleSelectDatabase = async (dbName: string) => {
-    try {
-      setRelationContext(null);
-      await selectDatabase(dbName);
-      setActiveDatabase(dbName);
-      await loadDatabases();
-      await loadTables();
-      const databasePath = dbName === '/' ? 'Raíz (/)' : `/${dbName}`;
-      showSuccess('Base de Datos Activa', `Cambiado a: ${databasePath}`);
-    } catch (err: any) {
-      showError('Error al cambiar de base de datos', err.message);
-    }
+    if (dbName === activeDatabase) return;
+    const targetDisplay = dbName === '/' || dbName === 'Principal (Raíz)' || dbName === 'Raíz (/)' ? 'Raíz (/)' : `/${dbName}`;
+
+    showConfirm({
+      title: '¿Cambiar de Base de Datos?',
+      message: `¿Estás seguro de que deseas cambiar a la base de datos '${targetDisplay}'? Se cerrará la tabla actual y se cargarán las tablas correspondientes a esta base de datos.`,
+      confirmText: 'Sí, Cambiar',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        try {
+          setRelationContext(null);
+          setSelectedTableName(null);
+          setSelectedTableDetail(null);
+          await selectDatabase(dbName);
+          setActiveDatabase(dbName);
+          await loadDatabases();
+          await loadTables();
+          showSuccess('Base de Datos Activa', `Cambiado a: ${targetDisplay}`);
+        } catch (err: any) {
+          showError('Error al cambiar de base de datos', err.message);
+        }
+      }
+    });
   };
 
   // Handler para crear una nueva Base de Datos
@@ -249,6 +284,7 @@ export const App: React.FC = () => {
           console.warn('Error cerrando directorio:', err);
         }
         setCurrentDirectory(null);
+        setRootDirectory(null);
         setTables([]);
         setDatabases([]);
         setSelectedTableName(null);
@@ -298,9 +334,25 @@ export const App: React.FC = () => {
     };
   }, [selectedTableName, loadTables, loadTableDetail, loadDatabases]);
 
-  // Delete Record Handler con diálogo custom
-  const handleDeleteRecord = (slotIndex: number) => {
+  // Delete Record Handler con verificación de Integridad Referencial
+  const handleDeleteRecord = async (slotIndex: number) => {
     if (!selectedTableName) return;
+
+    try {
+      // 1. Verificar si existen dependencias en otras tablas
+      const depCheck = await checkRecordDependencies(selectedTableName, slotIndex);
+
+      if (depCheck.hasDependencies) {
+        setDependencyInfo(depCheck);
+        setPendingDeleteSlot(slotIndex);
+        setDependencyModalOpen(true);
+        return;
+      }
+    } catch (e) {
+      console.warn('Error verificando dependencias relacionales:', e);
+    }
+
+    // 2. Si no hay dependencias relacionales, confirmación estándar
     showConfirm({
       title: '¿Eliminar Registro?',
       message: `¿Estás seguro de marcar el slot físico #${slotIndex} de la tabla '${selectedTableName}' como borrado (Tombstone O(1))? Se encolará automáticamente en la Free-List para reciclaje.`,
@@ -309,7 +361,7 @@ export const App: React.FC = () => {
       isDestructive: true,
       onConfirm: async () => {
         try {
-          await deleteRecord(selectedTableName, slotIndex);
+          await deleteRecord(selectedTableName, slotIndex, 'restrict');
           loadTableDetail(selectedTableName);
           loadTables(selectedTableName);
           showSuccess('Registro Eliminado', `El slot #${slotIndex} fue marcado como borrado y encolado en la Free-List.`);
@@ -318,6 +370,26 @@ export const App: React.FC = () => {
         }
       }
     });
+  };
+
+  const handleConfirmDependencyDelete = async (action: 'cascade' | 'set_null') => {
+    if (!selectedTableName || pendingDeleteSlot === null) return;
+    try {
+      await deleteRecord(selectedTableName, pendingDeleteSlot, action);
+      await loadTableDetail(selectedTableName);
+      await loadTables(selectedTableName);
+
+      const msg = action === 'cascade'
+        ? 'El registro principal y sus referencias vinculadas fueron eliminados en cascada.'
+        : 'El registro principal fue eliminado y sus referencias en tablas vinculadas fueron actualizadas a 0.';
+      showSuccess('Acción Relacional Ejecutada', msg);
+    } catch (err: any) {
+      showError('Error al procesar eliminación relacional', err.message);
+    } finally {
+      setPendingDeleteSlot(null);
+      setDependencyInfo(null);
+      setDependencyModalOpen(false);
+    }
   };
 
   // Drop Table Handler con diálogo custom
@@ -357,6 +429,7 @@ export const App: React.FC = () => {
         onOpenDBeaverModal={() => setDbeaverModalOpen(true)}
         onOpenExportModal={() => setExportModalOpen(true)}
         onOpenNewTableModal={() => setNewTableModalOpen(true)}
+        onOpenNewDatabaseModal={() => setNewDatabaseModalOpen(true)}
         onRefresh={() => {
           loadDatabases();
           loadTables(selectedTableName || undefined);
@@ -449,6 +522,7 @@ export const App: React.FC = () => {
                 setVacuumModalOpen(true);
               }}
               onDropTable={handleDropTable}
+              onOpenSchemaModal={handleOpenSchemaModal}
               onOpenDriveModal={() => setDriveModalOpen(true)}
               onCloseDirectory={handleCloseDirectory}
             />
@@ -486,6 +560,7 @@ export const App: React.FC = () => {
                         setVacuumModalOpen(true);
                       }
                     }}
+                    onOpenSchemaModal={handleOpenSchemaModal}
                   />
                 ) : databases.length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
@@ -553,7 +628,7 @@ export const App: React.FC = () => {
         onClose={() => setNewDatabaseModalOpen(false)}
         onDatabaseCreated={handleCreateDatabase}
         existingDatabases={databases.map((d) => d.name)}
-        currentDirectory={currentDirectory}
+        currentDirectory={rootDirectory || currentDirectory}
       />
 
       <DBeaverBridgeModal
@@ -622,6 +697,49 @@ export const App: React.FC = () => {
             loadTables(vacuumTargetTable);
             if (selectedTableName === vacuumTargetTable) {
               loadTableDetail(vacuumTargetTable);
+            }
+          }}
+        />
+      )}
+
+      <DeleteDependencyModal
+        isOpen={dependencyModalOpen}
+        dependencyInfo={dependencyInfo}
+        onClose={() => {
+          setDependencyModalOpen(false);
+          setDependencyInfo(null);
+          setPendingDeleteSlot(null);
+        }}
+        onConfirmDelete={handleConfirmDependencyDelete}
+      />
+
+      {schemaModalOpen && (
+        <EditTableSchemaModal
+          isOpen={schemaModalOpen}
+          onClose={() => {
+            setSchemaModalOpen(false);
+            setSchemaModalTable(null);
+          }}
+          tableName={schemaModalTable || selectedTableName || ''}
+          schema={
+            (schemaModalTable === selectedTableName && selectedTableDetail?.schema)
+              ? selectedTableDetail.schema
+              : {
+                  tableName: schemaModalTable || selectedTableName || '',
+                  recordSize: 32,
+                  fields: []
+                }
+          }
+          recordsCount={
+            (schemaModalTable === selectedTableName ? selectedTableDetail?.header?.totalSlots : 0) || 0
+          }
+          availableTables={tables.map((t) => t.name)}
+          onSchemaSaved={async () => {
+            const target = schemaModalTable || selectedTableName;
+            await loadDatabases();
+            await loadTables(target || undefined);
+            if (target) {
+              await loadTableDetail(target);
             }
           }}
         />

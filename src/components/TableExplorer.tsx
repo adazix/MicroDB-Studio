@@ -15,7 +15,8 @@ import {
   Plus,
   FolderPlus,
   FolderOpen,
-  FolderX
+  FolderX,
+  Sliders
 } from 'lucide-react';
 import { TableSummary, DatabaseInfo } from '../types/microdb.js';
 
@@ -30,6 +31,7 @@ interface TableExplorerProps {
   onSelectTable: (tableName: string) => void;
   onOpenVacuumModal: (tableName: string) => void;
   onDropTable: (tableName: string) => void;
+  onOpenSchemaModal?: (tableName: string) => void;
   onOpenDriveModal?: () => void;
   onCloseDirectory?: () => void;
 }
@@ -45,6 +47,7 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
   onSelectTable,
   onOpenVacuumModal,
   onDropTable,
+  onOpenSchemaModal,
   onOpenDriveModal,
   onCloseDirectory
 }) => {
@@ -68,10 +71,10 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
           </span>
           <button
             onClick={onOpenNewDatabaseModal}
-            className="flex items-center space-x-1 text-[11px] font-semibold text-sky-400 hover:text-sky-300 hover:bg-sky-500/10 px-2 py-0.5 rounded transition-all"
-            title="Crear nueva base de datos en la tarjeta SD"
+            className="flex items-center space-x-1 text-xs font-bold text-sky-300 hover:text-white bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 px-2 py-0.5 rounded-lg transition-all shadow-sm"
+            title="Crear nueva base de datos en la ubicación activa"
           >
-            <Plus className="w-3 h-3" />
+            <Plus className="w-3.5 h-3.5" />
             <span>Nueva BD</span>
           </button>
         </div>
@@ -302,6 +305,20 @@ export const TableExplorer: React.FC<TableExplorerProps> = ({
                     )}
 
                     {/* Quick Vacuum Button if table has deleted records */}
+                    {/* Edit Columns / Schema Button */}
+                    {onOpenSchemaModal && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenSchemaModal(table.name);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-sky-300 hover:bg-sky-500/15 rounded transition-all"
+                        title={`Editar estructura y columnas de '${table.name}'`}
+                      >
+                        <Sliders className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
                     {table.header.deletedRecords > 0 && (
                       <button
                         onClick={(e) => {

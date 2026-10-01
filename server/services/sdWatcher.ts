@@ -5,6 +5,7 @@
 import chokidar, { FSWatcher } from 'chokidar';
 import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
+import { isSystemOrIgnoredDir } from './diskDetector.js';
 
 export class SDWatcherService {
   private watcher: FSWatcher | null = null;
@@ -41,9 +42,22 @@ export class SDWatcherService {
     console.log(`[SDWatcher] Iniciando observación en tiempo real de: ${dirPath}`);
 
     this.watcher = chokidar.watch(dirPath, {
-      ignored: /(^|[/\\])\..|microdb_live\.sqlite.*|\.tmp_vacuum/, // Ignorar archivos ocultos y base de datos sqlite temporal
+      ignored: (entryPath: string) => {
+        const base = path.basename(entryPath);
+        if (!base) return false;
+        // Ignorar archivos ocultos, sqlite de trabajo y temporales
+        if (base.startsWith('.') || base.startsWith('$') || base.includes('microdb_live.sqlite') || base.includes('.tmp_vacuum')) {
+          return true;
+        }
+        // Ignorar carpetas críticas del sistema de Windows / SO
+        if (isSystemOrIgnoredDir(base)) {
+          return true;
+        }
+        return false;
+      },
       persistent: true,
       depth: 1,
+      ignorePermissionErrors: true,
       awaitWriteFinish: {
         stabilityThreshold: 300,
         pollInterval: 100
@@ -54,7 +68,13 @@ export class SDWatcherService {
       .on('add', (filePath) => this.handleFileEvent('add', filePath))
       .on('change', (filePath) => this.handleFileEvent('change', filePath))
       .on('unlink', (filePath) => this.handleFileEvent('unlink', filePath))
-      .on('error', (error) => console.error('[SDWatcher] Error:', error));
+      .on('error', (error: any) => {
+        // Ignorar errores de permisos del sistema que no impiden el funcionamiento de MicroDB
+        if (error && (error.code === 'EPERM' || error.code === 'EACCES')) {
+          return;
+        }
+        console.error('[SDWatcher] Error:', error);
+      });
   }
 
   private handleFileEvent(eventType: 'add' | 'change' | 'unlink', filePath: string): void {

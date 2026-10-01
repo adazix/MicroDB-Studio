@@ -14,6 +14,7 @@ import {
 import { exportData } from '../utils/api.js';
 import { TableSummary } from '../types/microdb.js';
 import { useToast } from './Toast.js';
+import { CustomSelect } from './ui/CustomSelect.js';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -122,17 +123,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
               Tabla a Exportar
             </label>
-            <select
+            <CustomSelect
               value={targetTable}
-              onChange={(e) => setTargetTable(e.target.value)}
-              className="w-full bg-[#0d1117] border border-[#30363d] focus:border-sky-500 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none"
-            >
-              {tables.map((t) => (
-                <option key={t.name} value={t.name}>
-                  {t.name} ({t.header.activeRecords} registros activos)
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setTargetTable(val)}
+              variant="sky"
+              className="w-full"
+              options={tables.map((t) => ({
+                value: t.name,
+                label: t.name,
+                badge: `${t.header.activeRecords} registros`
+              }))}
+            />
           </div>
 
           {/* Format Selector Cards */}

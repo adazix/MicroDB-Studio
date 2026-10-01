@@ -5,6 +5,18 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [1.2.0] - 2026-10-01
+
+### 🚀 Nuevas Funcionalidades y Mejoras
+- **Navegación y Cambio de Base de Datos Interactiva:** Se mejoró el backend para exponer y listar todas las bases de datos presentes en la unidad o carpeta padre al abrir cualquier subcarpeta directa.
+- **Confirmación de Cambio de Base de Datos:** Se incorporó un modal de confirmación antes de alternar la base de datos activa desde la barra lateral para evitar pérdida involuntaria de cambios.
+- **Examinar Carpeta con Posicionamiento Inicial:** El explorador nativo de carpetas de Windows ahora abre y posiciona el árbol directamente en el disco o carpeta seleccionada (p. ej., `D:\`).
+- **Nombres de Tablas en Mayúsculas (Arduino FAT 8.3):** Las tablas creadas se convierten automáticamente a mayúsculas para cumplir con los estándares del sistema de archivos FAT en microcontroladores.
+- **Limpieza de Esquemas Exclusivos `.jsn` / `.JSN`:** Se eliminó la dependencia de archivos auxiliares `.schema.json`. El software opera exclusivamente con esquemas binarios `.sch` y catálogos de catálogo JSON oficiales de Arduino MicroDB (`.jsn` / `.JSN`).
+- **Navegación por Claves Foráneas Robusta:** Mejoras en la resolución case-insensitive y coincidencia de relaciones entre tablas referenciadas en el selector de esquemas.
+
+---
+
 ## [1.1.1] - 2026-09-30
 
 ### 🛡️ Corrección de Errores y Validaciones

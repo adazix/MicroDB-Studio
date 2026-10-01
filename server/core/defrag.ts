@@ -130,4 +130,66 @@ export class TableDefragmenter {
       finalSlots: activeRecords.length
     };
   }
+
+  /**
+   * Altera el esquema de una tabla .tbl en disco (ADD COLUMN, MODIFY COLUMN, DROP COLUMN).
+   * Si la tabla está vacía (0 slots), actualiza la cabecera del archivo .tbl.
+   * Si tiene registros, migra los registros existentes recodificando su payload con el nuevo esquema.
+   */
+  public static alterTableSchema(
+    filePath: string,
+    oldSchema: TableSchema,
+    newSchema: TableSchema
+  ): { migratedSlots: number; previousRecordSize: number; newRecordSize: number } {
+    const oldHeader = MicroDBEngine.readTableHeader(filePath);
+    const previousRecordSize = oldHeader.recordSize;
+    const newRecordSize = newSchema.recordSize;
+
+    // Caso 1: Tabla vacía (0 slots creados)
+    if (oldHeader.totalSlots === 0) {
+      oldHeader.recordSize = newRecordSize;
+      MicroDBEngine.writeTableHeader(filePath, oldHeader);
+      return { migratedSlots: 0, previousRecordSize, newRecordSize };
+    }
+
+    // Caso 2: Tabla con slots/registros existentes
+    const { records } = MicroDBEngine.readAllSlots(filePath, oldSchema);
+    const tempFilePath = `${filePath}.tmp_alter`;
+
+    MicroDBEngine.createTable(tempFilePath, newRecordSize);
+    const newHeader = MicroDBEngine.readTableHeader(tempFilePath);
+    newHeader.nextAutoId = oldHeader.nextAutoId;
+
+    const fd = fs.openSync(tempFilePath, 'r+');
+    const slotTotalSize = SLOT_HEADER_SIZE + newRecordSize;
+
+    for (let i = 0; i < records.length; i++) {
+      const rec = records[i];
+      const slotOffset = newHeader.dataStartOffset + (i * slotTotalSize);
+
+      const slotHeaderBuf = Buffer.alloc(SLOT_HEADER_SIZE);
+      slotHeaderBuf.writeUInt8(rec._status, 0);
+      slotHeaderBuf.writeUInt32LE(rec._recordId, 1);
+      slotHeaderBuf.writeUInt32LE(rec._nextFreeSlot !== undefined ? rec._nextFreeSlot : MICRODB_NULL_OFFSET, 5);
+
+      // Codificar con el nuevo esquema (campos nuevos toman valor por defecto 0 / '')
+      const payloadBuf = MicroDBEngine.encodePayload(rec, newSchema);
+
+      fs.writeSync(fd, slotHeaderBuf, 0, SLOT_HEADER_SIZE, slotOffset);
+      fs.writeSync(fd, payloadBuf, 0, newRecordSize, slotOffset + SLOT_HEADER_SIZE);
+    }
+
+    newHeader.totalSlots = oldHeader.totalSlots;
+    newHeader.activeRecords = oldHeader.activeRecords;
+    newHeader.deletedRecords = oldHeader.deletedRecords;
+    newHeader.firstFreeSlot = oldHeader.firstFreeSlot;
+
+    fs.closeSync(fd);
+    MicroDBEngine.writeTableHeader(tempFilePath, newHeader);
+
+    fs.unlinkSync(filePath);
+    fs.renameSync(tempFilePath, filePath);
+
+    return { migratedSlots: records.length, previousRecordSize, newRecordSize };
+  }
 }

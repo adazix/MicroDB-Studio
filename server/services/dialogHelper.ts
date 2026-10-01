@@ -8,7 +8,14 @@ import path from 'node:path';
 
 const execAsync = util.promisify(exec);
 
-export async function showNativeFolderDialog(title: string = 'Seleccionar carpeta'): Promise<string | null> {
+export async function showNativeFolderDialog(
+  title: string = 'Seleccionar carpeta',
+  initialPath?: string | null
+): Promise<string | null> {
+  const normalizedInitial = initialPath && typeof initialPath === 'string' && initialPath.trim()
+    ? path.normalize(initialPath.trim())
+    : null;
+
   // 1. Si estamos ejecutando dentro de Electron
   if (process.versions.electron) {
     try {
@@ -17,10 +24,13 @@ export async function showNativeFolderDialog(title: string = 'Seleccionar carpet
       const BrowserWindow = electron.BrowserWindow || (electron as any).default?.BrowserWindow;
       const win = BrowserWindow ? BrowserWindow.getFocusedWindow() : null;
       if (dialog && typeof dialog.showOpenDialog === 'function') {
-        const dialogOpts = {
+        const dialogOpts: any = {
           title,
           properties: ['openDirectory', 'createDirectory'] as ('openDirectory' | 'createDirectory')[]
         };
+        if (normalizedInitial) {
+          dialogOpts.defaultPath = normalizedInitial;
+        }
         const result = win
           ? await dialog.showOpenDialog(win, dialogOpts)
           : await dialog.showOpenDialog(dialogOpts);
@@ -37,18 +47,32 @@ export async function showNativeFolderDialog(title: string = 'Seleccionar carpet
   // 2. Fallback de PowerShell en Windows
   if (process.platform === 'win32') {
     try {
+      const initialPathCmd = normalizedInitial
+        ? `$dialog.SelectedPath = '${normalizedInitial.replace(/'/g, "''")}'`
+        : '';
+
+      // Usar script de PowerShell con STA (Single Thread Apartment) y ventana modal
       const psScript = `
-Add-Type -AssemblyName System.Windows.Forms
+[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms')
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
 $dialog.Description = '${title.replace(/'/g, "''")}'
 $dialog.ShowNewFolderButton = $true
-if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+$dialog.RootFolder = [System.Environment+SpecialFolder]::MyComputer
+${initialPathCmd}
+
+$form = New-Object System.Windows.Forms.Form
+$form.TopMost = $true
+$form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
+
+if ($dialog.ShowDialog($form) -eq [System.Windows.Forms.DialogResult]::OK) {
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
     Write-Output $dialog.SelectedPath
 }
+$form.Dispose()
+$dialog.Dispose()
 `;
       const encodedCommand = Buffer.from(psScript, 'utf16le').toString('base64');
-      const { stdout } = await execAsync(`powershell -NoProfile -NonInteractive -EncodedCommand ${encodedCommand}`);
+      const { stdout } = await execAsync(`powershell.exe -NoProfile -Sta -EncodedCommand ${encodedCommand}`);
       const lines = stdout.trim().split(/\r?\n/).filter((l) => !l.startsWith('#<') && !l.startsWith('<'));
       const chosen = lines[lines.length - 1]?.trim();
       return chosen ? path.normalize(chosen) : null;

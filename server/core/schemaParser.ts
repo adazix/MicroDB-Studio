@@ -89,6 +89,14 @@ export class SchemaParser {
         const fieldName = match[2].trim();
         const arrayLen = match[3] ? Number.parseInt(match[3], 10) : undefined;
 
+        // Validar campos reservados por el motor MicroDB
+        const lowerName = fieldName.toLowerCase();
+        if (['id', '_id', '_recordid', '_slotindex', '_status', '_nextfreeslot'].includes(lowerName)) {
+          throw new Error(
+            `El campo '${fieldName}' está reservado por MicroDB. Cada registro ya incluye automáticamente la Clave Primaria 'ID' autoincremental (uint32) en la cabecera binaria del slot. Omite '${fieldName}' de tu struct C++.`
+          );
+        }
+
         const { type, baseSize } = this.getTypeInfo(rawType);
 
         let finalType = type;

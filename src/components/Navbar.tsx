@@ -26,6 +26,7 @@ interface NavbarProps {
   onOpenDBeaverModal: () => void;
   onOpenExportModal: () => void;
   onOpenNewTableModal: () => void;
+  onOpenNewDatabaseModal?: () => void;
   onRefresh: () => void;
   isWatching: boolean;
 }
@@ -40,6 +41,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenDBeaverModal,
   onOpenExportModal,
   onOpenNewTableModal,
+  onOpenNewDatabaseModal,
   onRefresh,
   isWatching
 }) => {
@@ -179,6 +181,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Download className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Exportar</span>
             </button>
+
+            {/* New Database Button */}
+            {onOpenNewDatabaseModal && (
+              <button
+                onClick={onOpenNewDatabaseModal}
+                className="flex items-center space-x-1.5 bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-300 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+                title="Crear una nueva base de datos en la unidad o carpeta activa"
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Nueva BD</span>
+                <span className="sm:hidden">+ BD</span>
+              </button>
+            )}
 
             {/* New Table Button */}
             <button

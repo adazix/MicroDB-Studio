@@ -1,5 +1,5 @@
 // ============================================================================
-// MICRODB STUDIO - MODAL PARA CREAR NUEVA BASE DE DATOS (CON PRIORIDAD SD)
+// MICRODB STUDIO - MODAL PARA CREAR NUEVA BASE DE DATOS (CON DETECCIÓN DE UBICACIÓN Y DISCOS)
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -31,7 +31,7 @@ export const NewDatabaseModal: React.FC<NewDatabaseModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [loadingDrives, setLoadingDrives] = useState(false);
 
-  // Cargar unidades y priorizar tarjeta SD si existe
+  // Cargar lista de unidades del equipo y configurar directorio de destino por defecto
   useEffect(() => {
     if (!isOpen) return;
 
@@ -42,23 +42,23 @@ export const NewDatabaseModal: React.FC<NewDatabaseModalProps> = ({
       .then((data) => {
         setDrives(data.drives);
         const sd = data.drives.find((d) => d.isSdCard || d.type === 'removable');
-        if (sd) {
-          setHasSdCard(true);
+        setHasSdCard(Boolean(sd));
+
+        // Prioridad 1: Directorio actualmente seleccionado/abierto
+        if (currentDirectory) {
+          setTargetParentDir(currentDirectory);
+        } else if (sd) {
+          // Prioridad 2: Tarjeta SD
           const root = sd.letter.endsWith('\\') ? sd.letter : `${sd.letter}\\`;
           setTargetParentDir(root);
+        } else if (data.currentDbDirectory) {
+          setTargetParentDir(data.currentDbDirectory);
+        } else if (data.drives.length > 0) {
+          const firstDrive = data.drives[0];
+          const root = firstDrive.letter.endsWith('\\') ? firstDrive.letter : `${firstDrive.letter}\\`;
+          setTargetParentDir(root);
         } else {
-          setHasSdCard(false);
-          if (currentDirectory) {
-            setTargetParentDir(currentDirectory);
-          } else if (data.currentDbDirectory) {
-            setTargetParentDir(data.currentDbDirectory);
-          } else if (data.drives.length > 0) {
-            const firstDrive = data.drives[0];
-            const root = firstDrive.letter.endsWith('\\') ? firstDrive.letter : `${firstDrive.letter}\\`;
-            setTargetParentDir(root);
-          } else {
-            setTargetParentDir('');
-          }
+          setTargetParentDir('');
         }
       })
       .catch((err) => {
@@ -83,7 +83,8 @@ export const NewDatabaseModal: React.FC<NewDatabaseModalProps> = ({
   // Abrir explorador nativo de carpetas de Windows
   const handleBrowseFolder = async () => {
     try {
-      const res = await browseDirectory('Seleccionar carpeta de destino para la Base de Datos');
+      const initial = targetParentDir.trim() || undefined;
+      const res = await browseDirectory('Seleccionar carpeta de destino para la Base de Datos', initial);
       if (!res.canceled && res.selectedPath) {
         setTargetParentDir(res.selectedPath);
       }
@@ -107,6 +108,11 @@ export const NewDatabaseModal: React.FC<NewDatabaseModalProps> = ({
       setLoading(false);
     }
   };
+
+  // Identificar el disco activo correspondiente a targetParentDir
+  const activeDriveMatch = drives.find((d) =>
+    targetParentDir.toLowerCase().startsWith(d.letter.toLowerCase())
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200 select-none">
@@ -132,27 +138,27 @@ export const NewDatabaseModal: React.FC<NewDatabaseModalProps> = ({
 
         {/* Content / Form */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* Ubicación de Destino (Priorizando SD o Navegación Manual) */}
-          <div className="space-y-1.5">
+          {/* Ubicación de Destino con Selector de Disco e Input de Ruta */}
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="block text-xs font-semibold text-slate-300">
                 Ubicación / Carpeta de Destino
               </label>
-              {hasSdCard ? (
+              {activeDriveMatch?.isSdCard ? (
                 <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center space-x-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span>SD Priorizada</span>
+                  <span>SD ({activeDriveMatch.letter})</span>
                 </span>
-              ) : (
-                <span className="text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">
-                  Sin SD (Seleccionar Carpeta)
+              ) : activeDriveMatch ? (
+                <span className="text-[10px] font-semibold text-sky-400 bg-sky-500/10 border border-sky-500/30 px-2 py-0.5 rounded-full">
+                  Disco {activeDriveMatch.letter}
                 </span>
-              )}
+              ) : null}
             </div>
 
-            {/* Botones de unidades detectadas */}
+            {/* Chips selector de discos disponibles */}
             {drives.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-0.5">
+              <div className="flex flex-wrap gap-1.5">
                 {drives.map((d) => {
                   const dPath = d.letter.endsWith('\\') ? d.letter : `${d.letter}\\`;
                   const isSelected = targetParentDir.toLowerCase().startsWith(d.letter.toLowerCase());
@@ -164,33 +170,35 @@ export const NewDatabaseModal: React.FC<NewDatabaseModalProps> = ({
                       className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center space-x-1.5 border transition-all ${
                         isSelected
                           ? d.isSdCard
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
-                            : 'bg-sky-500/20 text-sky-300 border-sky-500/40 shadow-sm'
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
+                            : 'bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-sm'
                           : 'bg-[#0d1117] text-slate-400 border-[#30363d] hover:bg-[#21262d] hover:text-slate-200'
                       }`}
                     >
                       <HardDrive className="w-3.5 h-3.5" />
-                      <span>{d.letter} {d.isSdCard ? '(Tarjeta SD)' : `(${d.name})`}</span>
+                      <span>{d.letter} {d.isSdCard ? '(SD)' : `(${d.name})`}</span>
                     </button>
                   );
                 })}
               </div>
             )}
 
-            {/* Input de ruta + Botón Examinar */}
-            <div className="flex space-x-2 pt-1">
-              <input
-                type="text"
-                value={targetParentDir}
-                onChange={(e) => setTargetParentDir(e.target.value)}
-                placeholder="Ruta destino (ej: E:\  o  D:\MisDatos)"
-                className="flex-1 bg-[#0d1117] border border-[#30363d] focus:border-sky-500 rounded-xl px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none transition-all placeholder:text-slate-600"
-              />
+            {/* Input de ruta actual + Botón Examinar */}
+            <div className="flex space-x-2 pt-0.5">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={targetParentDir}
+                  onChange={(e) => setTargetParentDir(e.target.value)}
+                  placeholder="Ruta destino (ej: E:\  o  D:\MisDatos)"
+                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-sky-500 rounded-xl px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none transition-all placeholder:text-slate-600"
+                />
+              </div>
               <button
                 type="button"
                 onClick={handleBrowseFolder}
                 className="bg-[#21262d] hover:bg-sky-600 hover:text-white border border-[#30363d] text-slate-300 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5 shrink-0 active:scale-95"
-                title="Examinar y seleccionar carpeta en tu computador"
+                title="Examinar y seleccionar carpeta en tu equipo mediante el explorador del sistema"
               >
                 <FolderOpen className="w-3.5 h-3.5 text-sky-400" />
                 <span>Examinar...</span>

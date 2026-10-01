@@ -16,7 +16,8 @@ import {
   Key,
   ArrowLeft,
   ExternalLink,
-  Zap
+  Zap,
+  Sliders
 } from 'lucide-react';
 import { TableSchema, TableHeaderData, DecodedRecord, FieldSchema } from '../types/microdb.js';
 
@@ -41,6 +42,7 @@ interface DataGridViewProps {
   onInspectHexClick: (record: DecodedRecord) => void;
   onDropTableClick?: () => void;
   onVacuumClick?: () => void;
+  onOpenSchemaModal?: (tableName: string) => void;
 }
 
 // Criterio estricto: Sólo es Clave Foránea si está explícitamente definida en el esquema (isForeignKey + referencesTable)
@@ -66,7 +68,8 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
   onDeleteClick,
   onInspectHexClick,
   onDropTableClick,
-  onVacuumClick
+  onVacuumClick,
+  onOpenSchemaModal
 }) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'deleted'>('all');
@@ -187,27 +190,42 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
           </div>
 
           <div className="flex items-center space-x-2">
+            {onOpenSchemaModal && (
+              <button
+                onClick={() => onOpenSchemaModal(tableName)}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] hover:border-slate-500 rounded-lg text-xs font-semibold text-slate-200 transition-colors shadow-sm cursor-pointer"
+                title="Añadir, modificar, reordenar o eliminar columnas de esta tabla"
+              >
+                <Sliders className="w-3.5 h-3.5 text-sky-400" />
+                <span>Columnas</span>
+                <span className="px-1.5 py-0.2 rounded bg-[#0d1117] text-[10px] font-mono text-sky-300 border border-[#30363d]">
+                  {schema.fields.length}
+                </span>
+              </button>
+            )}
+
             {onVacuumClick && (
               <button
                 onClick={onVacuumClick}
+                disabled={header.deletedRecords === 0}
                 className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
                   header.deletedRecords > 0
-                    ? 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-500/10'
-                    : 'bg-[#21262d] hover:bg-[#30363d] border-[#30363d] text-slate-400 hover:text-slate-200'
+                    ? 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-500/10 cursor-pointer active:scale-95'
+                    : 'bg-[#21262d]/50 border-[#30363d]/60 text-slate-500 cursor-not-allowed opacity-50'
                 }`}
                 title={
                   header.deletedRecords > 0
-                    ? `Compactar tabla y eliminar definitivamente ${header.deletedRecords} registro(s) borrado(s) (Vacuum)`
-                    : 'Ejecutar mantenimiento Vacuum (la tabla ya está compactada)'
+                    ? `Compactar tabla y liberar definitivamente ${header.deletedRecords} registro(s) borrado(s) en Free-List (Vacuum)`
+                    : 'Vacuum no necesario: No hay registros borrados para compactar en esta tabla'
                 }
               >
-                <Zap className={`w-3.5 h-3.5 ${header.deletedRecords > 0 ? 'text-amber-400' : 'text-slate-400'}`} />
+                <Zap className={`w-3.5 h-3.5 ${header.deletedRecords > 0 ? 'text-amber-400' : 'text-slate-500'}`} />
                 <span>Vacuum</span>
-                {header.deletedRecords > 0 && (
+                {header.deletedRecords > 0 ? (
                   <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-500/30 text-amber-200">
                     {header.deletedRecords}
                   </span>
-                )}
+                ) : null}
               </button>
             )}
 
@@ -373,7 +391,32 @@ export const DataGridView: React.FC<DataGridViewProps> = ({
           </thead>
 
           <tbody className="divide-y divide-[#21262d]">
-            {paginatedRecords.length === 0 ? (
+            {schema.fields.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="text-center py-16 px-4 text-slate-400">
+                  <div className="max-w-md mx-auto space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center mx-auto shadow-inner">
+                      <Sliders className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-white">Esta tabla aún no tiene columnas definidas</h4>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Cada tabla necesita al menos una columna de datos (payload) para poder almacenar e insertar registros desde Arduino o el Studio.
+                      </p>
+                    </div>
+                    {onOpenSchemaModal && (
+                      <button
+                        onClick={() => onOpenSchemaModal(tableName)}
+                        className="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-sky-500/20 inline-flex items-center space-x-2 cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Añadir Columnas a la Tabla</span>
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ) : paginatedRecords.length === 0 ? (
               <tr>
                 <td colSpan={schema.fields.length + 3} className="text-center py-16 text-slate-500">
                   <Layers className="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-40" />

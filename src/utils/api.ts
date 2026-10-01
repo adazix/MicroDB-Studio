@@ -10,7 +10,8 @@ import {
   TableHeaderData,
   SqlQueryResult,
   DatabaseInfo,
-  ExploreResult
+  ExploreResult,
+  CheckDependenciesResult
 } from '../types/microdb.js';
 
 const API_BASE = '/api';
@@ -73,11 +74,14 @@ export async function createDatabase(databaseName: string, parentDirectory?: str
   return data;
 }
 
-export async function browseDirectory(title?: string): Promise<{ canceled: boolean; selectedPath?: string }> {
+export async function browseDirectory(
+  title?: string,
+  initialPath?: string
+): Promise<{ canceled: boolean; selectedPath?: string }> {
   const res = await fetch(`${API_BASE}/browse-directory`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title })
+    body: JSON.stringify({ title, initialPath })
   });
   const data = await res.json();
   if (!data.success) throw new Error(data.error);
@@ -146,8 +150,24 @@ export async function updateRecord(tableName: string, slotIndex: number, recordD
   if (!data.success) throw new Error(data.error);
 }
 
-export async function deleteRecord(tableName: string, slotIndex: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/table/${tableName}/record/${slotIndex}`, {
+export async function checkRecordDependencies(
+  tableName: string,
+  slotIndex: number
+): Promise<CheckDependenciesResult> {
+  const res = await fetch(`${API_BASE}/table/${tableName}/record/${slotIndex}/check-dependencies`, {
+    method: 'POST'
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error);
+  return data;
+}
+
+export async function deleteRecord(
+  tableName: string,
+  slotIndex: number,
+  action: 'restrict' | 'cascade' | 'set_null' = 'restrict'
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/table/${tableName}/record/${slotIndex}?action=${action}`, {
     method: 'DELETE'
   });
   const data = await res.json();

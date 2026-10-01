@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { TableSchema, DecodedRecord } from '../types/microdb.js';
 import { insertRecord, updateRecord, fetchTableDetail } from '../utils/api.js';
+import { CustomSelect } from './ui/CustomSelect.js';
 
 interface RecordEditModalProps {
   isOpen: boolean;
@@ -208,24 +209,26 @@ export const RecordEditModal: React.FC<RecordEditModalProps> = ({
                     {/* Campo selector de Clave Foránea */}
                     {isFk ? (
                       <div className="space-y-1.5">
-                        <select
-                          value={formData[field.name] !== undefined ? formData[field.name] : ''}
-                          onChange={(e) => handleChange(field.name, e.target.value)}
-                          className="w-full bg-[#161b22] border border-[#30363d] focus:border-sky-500 rounded-xl px-3.5 py-2 text-xs text-white font-mono focus:outline-none"
-                        >
-                          <option value="">-- Seleccionar registro de '{field.referencesTable}' --</option>
-                          {foreignOptions[field.name]?.map((parentRec) => {
-                            const textCol = Object.entries(parentRec).find(
-                              ([k, v]) => !k.startsWith('_') && typeof v === 'string' && v.trim().length > 0
-                            );
-                            const desc = textCol ? ` (${textCol[1]})` : '';
-                            return (
-                              <option key={parentRec._slotIndex} value={parentRec._recordId}>
-                                ID #{parentRec._recordId} {desc}
-                              </option>
-                            );
-                          })}
-                        </select>
+                        <CustomSelect
+                          value={formData[field.name] !== undefined ? String(formData[field.name]) : ''}
+                          onChange={(val) => handleChange(field.name, val)}
+                          variant="violet"
+                          className="w-full"
+                          placeholder={`-- Seleccionar registro de '${field.referencesTable}' --`}
+                          options={[
+                            { value: '', label: `-- Sin asignar (NULL) --` },
+                            ...(foreignOptions[field.name]?.map((parentRec) => {
+                              const textCol = Object.entries(parentRec).find(
+                                ([k, v]) => !k.startsWith('_') && typeof v === 'string' && v.trim().length > 0
+                              );
+                              const desc = textCol ? ` (${textCol[1]})` : '';
+                              return {
+                                value: String(parentRec._recordId),
+                                label: `ID #${parentRec._recordId}${desc}`
+                              };
+                            }) || [])
+                          ]}
+                        />
                         <p className="text-[10px] text-slate-400 font-mono">
                           Validado automáticamente contra la tabla padre '{field.referencesTable}'
                         </p>

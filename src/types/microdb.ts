@@ -107,6 +107,23 @@ export interface SqlQueryResult {
   executionTimeMs: number;
 }
 
+export interface RecordDependencyInfo {
+  tableName: string;
+  tablePath: string;
+  fkField: string;
+  matchingCount: number;
+  matchingSlots: { slotIndex: number; recordId: number }[];
+}
+
+export interface CheckDependenciesResult {
+  hasDependencies: boolean;
+  targetRecordId: number;
+  tableName: string;
+  slotIndex: number;
+  totalDependentRecords: number;
+  dependencies: RecordDependencyInfo[];
+}
+
 export interface BreadcrumbItem {
   name: string;
   path: string;
