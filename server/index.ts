@@ -729,38 +729,77 @@ app.post('/api/fs/create-folder', async (req, res) => {
   }
 });
 
-// 1.4 Eliminar base de datos completa de la SD
+// 1.4 Eliminar base de datos completa de la SD o disco
 app.delete('/api/database/:name', async (req, res) => {
   try {
-    const dbName = req.params.name;
-    if (!rootDirectory) return res.status(400).json({ success: false, error: 'No hay unidad abierta' });
-    if (dbName === 'Principal (Raíz)' || isSystemOrIgnoredDir(dbName)) {
-      return res.status(400).json({ success: false, error: 'No se puede eliminar una carpeta de sistema o el directorio raíz' });
-    }
+    const rawName = req.params.name ? decodeURIComponent(req.params.name).trim() : '';
+    const cleanName = rawName.replace(/^[\/\\]+/, '');
+    const customPath = (req.query.path as string) || (req.body && req.body.path);
 
-    const targetDir = path.join(rootDirectory, dbName);
-    if (fs.existsSync(targetDir)) {
-      fs.rmSync(targetDir, { recursive: true, force: true });
-    }
+    let targetDir: string | null = null;
 
-    const dbs = scanDatabases(rootDirectory);
-    if (dbs.length > 0) {
-      currentDatabase = dbs[0].name;
-      currentDbDirectory = currentDatabase === 'Principal (Raíz)' || currentDatabase === 'Raíz (/)' || currentDatabase === '/'
-        ? rootDirectory
-        : path.join(rootDirectory, currentDatabase);
-      loadSchemasFromDisk(currentDbDirectory);
-      await SQLiteBridge.syncFolderToSqlite(currentDbDirectory, schemas);
+    if (customPath && typeof customPath === 'string' && customPath.trim()) {
+      targetDir = path.normalize(customPath.trim());
+    } else if (rootDirectory) {
+      if (!cleanName || cleanName === 'Principal (Raíz)' || cleanName === 'Raíz (/)' || cleanName === '/') {
+        return res.status(400).json({ success: false, error: 'No se puede eliminar el directorio raíz' });
+      }
+      targetDir = path.normalize(path.join(rootDirectory, cleanName));
     } else {
-      currentDatabase = '';
+      return res.status(400).json({ success: false, error: 'No se proporcionó la ruta o nombre de la base de datos a eliminar' });
+    }
+
+    // Validar que no sea unidad de disco raíz (ej: C:\ o E:\) ni carpeta del sistema
+    const isDriveRoot = /^[a-zA-Z]:\\?$/.test(targetDir) || targetDir === '/' || targetDir === '\\';
+    if (isDriveRoot) {
+      return res.status(400).json({ success: false, error: 'Acción bloqueada: No se puede eliminar una unidad de disco raíz entera' });
+    }
+
+    const baseName = path.basename(targetDir);
+    if (isSystemOrIgnoredDir(baseName)) {
+      return res.status(400).json({ success: false, error: `No se puede eliminar una carpeta de sistema ('${baseName}')` });
+    }
+
+    if (!fs.existsSync(targetDir)) {
+      return res.status(404).json({ success: false, error: `La carpeta '${targetDir}' no existe en disco` });
+    }
+
+    // Eliminar carpeta y todos sus contenidos
+    fs.rmSync(targetDir, { recursive: true, force: true });
+
+    // Si la base de datos activa o el rootDirectory coincidía con la carpeta eliminada
+    const wasActiveDb = currentDbDirectory && path.normalize(currentDbDirectory).toLowerCase() === targetDir.toLowerCase();
+    const wasRootDir = rootDirectory && path.normalize(rootDirectory).toLowerCase() === targetDir.toLowerCase();
+
+    if (wasRootDir) {
+      rootDirectory = null;
       currentDbDirectory = null;
+      currentDatabase = '';
       schemas.clear();
+    } else if (wasActiveDb && rootDirectory && fs.existsSync(rootDirectory)) {
+      const dbs = scanDatabases(rootDirectory);
+      if (dbs.length > 0) {
+        currentDatabase = dbs[0].name;
+        currentDbDirectory = currentDatabase === 'Principal (Raíz)' || currentDatabase === 'Raíz (/)' || currentDatabase === '/'
+          ? rootDirectory
+          : path.join(rootDirectory, currentDatabase);
+        loadSchemasFromDisk(currentDbDirectory);
+        try {
+          await SQLiteBridge.syncFolderToSqlite(currentDbDirectory, schemas);
+        } catch (e) {
+          console.warn('Error sincronizando SQLite tras eliminar BD:', e);
+        }
+      } else {
+        currentDatabase = '';
+        currentDbDirectory = null;
+        schemas.clear();
+      }
     }
 
     res.json({
       success: true,
       activeDatabase: currentDatabase,
-      message: `Base de datos '${dbName}' eliminada de la SD`
+      message: `Base de datos '${baseName}' eliminada exitosamente`
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

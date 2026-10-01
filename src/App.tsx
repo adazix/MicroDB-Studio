@@ -245,22 +245,26 @@ export const App: React.FC = () => {
 
   // Handler para eliminar una Base de Datos
   const handleDeleteDatabase = (dbName: string) => {
-    if (dbName === '/' || dbName === 'Raíz') {
+    const cleanName = dbName.replace(/^[\/\\]+/, '');
+    if (!cleanName || cleanName === 'Raíz' || cleanName === 'Principal (Raíz)') {
       showError('Acción no permitida', 'No se puede eliminar el directorio raíz.');
       return;
     }
 
+    const dbObj = databases.find((d) => d.name === dbName || d.name === cleanName);
+    const dbPath = dbObj?.path;
+
     showConfirm({
       title: '¿Eliminar Base de Datos Completa?',
-      message: `¿Estás seguro de eliminar el directorio '/${dbName}' y todas sus tablas de la tarjeta SD? Esta acción no se puede deshacer.`,
+      message: `¿Estás seguro de eliminar el directorio '/${cleanName}' y todas sus tablas de la tarjeta SD? Esta acción no se puede deshacer.`,
       confirmText: 'Sí, Eliminar Base de Datos',
       cancelText: 'Cancelar',
       isDestructive: true,
       onConfirm: async () => {
         try {
           setRelationContext(null);
-          await deleteDatabase(dbName);
-          showSuccess('Base de Datos Eliminada', `El directorio /${dbName} fue eliminado de la SD.`);
+          await deleteDatabase(cleanName, dbPath);
+          showSuccess('Base de Datos Eliminada', `El directorio /${cleanName} fue eliminado de la SD.`);
           await loadDatabases();
           await loadTables();
         } catch (err: any) {

@@ -12,9 +12,13 @@ export async function showNativeFolderDialog(
   title: string = 'Seleccionar carpeta',
   initialPath?: string | null
 ): Promise<string | null> {
-  const normalizedInitial = initialPath && typeof initialPath === 'string' && initialPath.trim()
+  let normalizedInitial = initialPath && typeof initialPath === 'string' && initialPath.trim()
     ? path.normalize(initialPath.trim())
     : null;
+
+  if (normalizedInitial && /^[a-zA-Z]:$/.test(normalizedInitial)) {
+    normalizedInitial = `${normalizedInitial}\\`;
+  }
 
   // 1. Si estamos ejecutando dentro de Electron
   if (process.versions.electron) {
@@ -47,8 +51,9 @@ export async function showNativeFolderDialog(
   // 2. Fallback de PowerShell en Windows
   if (process.platform === 'win32') {
     try {
-      const initialPathCmd = normalizedInitial
-        ? `$dialog.SelectedPath = '${normalizedInitial.replace(/'/g, "''")}'`
+      const safeInit = normalizedInitial ? normalizedInitial.replace(/'/g, "''") : '';
+      const initialPathCmd = safeInit
+        ? `$init = '${safeInit}'\nif ($init -and (Test-Path $init)) { $dialog.SelectedPath = $init }`
         : '';
 
       // Usar script de PowerShell con STA (Single Thread Apartment) y ventana modal
@@ -57,7 +62,6 @@ export async function showNativeFolderDialog(
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
 $dialog.Description = '${title.replace(/'/g, "''")}'
 $dialog.ShowNewFolderButton = $true
-$dialog.RootFolder = [System.Environment+SpecialFolder]::MyComputer
 ${initialPathCmd}
 
 $form = New-Object System.Windows.Forms.Form

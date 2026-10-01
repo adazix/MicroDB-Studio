@@ -88,9 +88,12 @@ export async function browseDirectory(
   return data;
 }
 
-export async function deleteDatabase(databaseName: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/database/${databaseName}`, {
-    method: 'DELETE'
+export async function deleteDatabase(databaseName: string, dbPath?: string): Promise<void> {
+  const query = dbPath ? `?path=${encodeURIComponent(dbPath)}` : '';
+  const res = await fetch(`${API_BASE}/database/${encodeURIComponent(databaseName)}${query}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: dbPath ? JSON.stringify({ path: dbPath }) : undefined
   });
   const data = await res.json();
   if (!data.success) throw new Error(data.error);

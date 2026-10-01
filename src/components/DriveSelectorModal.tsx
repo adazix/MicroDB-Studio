@@ -13,10 +13,12 @@ import {
   Folder,
   ArrowRight,
   Database,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from 'lucide-react';
-import { DetectedDrive } from '../types/microdb.js';
-import { fetchDrives, openDirectory, browseDirectory } from '../utils/api.js';
+import { DetectedDrive, DetectedDatabase } from '../types/microdb.js';
+import { fetchDrives, openDirectory, browseDirectory, deleteDatabase } from '../utils/api.js';
+import { useToast } from './Toast.js';
 
 interface DriveSelectorModalProps {
   isOpen: boolean;
@@ -31,6 +33,7 @@ export const DriveSelectorModal: React.FC<DriveSelectorModalProps> = ({
   onDirectoryOpened,
   currentDirectory
 }) => {
+  const { showConfirm, showSuccess, showError } = useToast();
   const [drives, setDrives] = useState<DetectedDrive[]>([]);
   const [customPath, setCustomPath] = useState(currentDirectory || '');
   const [loading, setLoading] = useState(false);
@@ -41,7 +44,7 @@ export const DriveSelectorModal: React.FC<DriveSelectorModalProps> = ({
     setError(null);
     try {
       const data = await fetchDrives();
-      setDrives(data.drives);
+      setDrives(data.drives || []);
     } catch (err: any) {
       setError(err.message || 'Error cargando unidades');
     } finally {
@@ -73,9 +76,33 @@ export const DriveSelectorModal: React.FC<DriveSelectorModalProps> = ({
     }
   };
 
+  const handleDeleteDbClick = (db: DetectedDatabase) => {
+    const tableInfo = db.tableCount > 0
+      ? `(${db.tableCount} tabla(s): ${db.tables.join(', ')})`
+      : '(sin tablas)';
+
+    showConfirm({
+      title: '¿Eliminar Base de Datos?',
+      message: `¿Estás seguro de eliminar permanentemente la base de datos '${db.name}' ${tableInfo} en '${db.path}'? Esta acción borrará todas sus tablas de la tarjeta SD / disco y no se puede deshacer.`,
+      confirmText: 'Sí, Eliminar Base de Datos',
+      cancelText: 'Cancelar',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          await deleteDatabase(db.name, db.path);
+          showSuccess('Base de datos eliminada', `La base de datos '${db.name}' fue eliminada correctamente.`);
+          await loadDrives();
+        } catch (err: any) {
+          showError('Error al eliminar base de datos', err.message || 'No se pudo eliminar la base de datos');
+        }
+      }
+    });
+  };
+
   const handleBrowseFolder = async () => {
     try {
-      const initial = (customPath || currentDirectory || '').trim() || undefined;
+      const sdFallback = drives.find((d) => d.isSdCard || d.type === 'removable')?.letter;
+      const initial = (customPath || currentDirectory || sdFallback || '').trim() || undefined;
       const res = await browseDirectory('Seleccionar tarjeta SD o carpeta de base de datos', initial);
       if (!res.canceled && res.selectedPath) {
         setCustomPath(res.selectedPath);
@@ -235,14 +262,29 @@ export const DriveSelectorModal: React.FC<DriveSelectorModalProps> = ({
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center space-x-1 shrink-0 pl-2">
+                                  <div className="flex items-center space-x-1.5 shrink-0 pl-2">
                                     {isDbSelected ? (
-                                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                      <CheckCircle2 className="w-4 h-4 text-emerald-400 mr-1" />
                                     ) : (
-                                      <span className="text-xs text-emerald-400 font-semibold group-hover:translate-x-0.5 transition-transform flex items-center space-x-0.5">
+                                      <span className="text-xs text-emerald-400 font-semibold group-hover:translate-x-0.5 transition-transform flex items-center space-x-0.5 mr-1">
                                         <span>Abrir</span>
                                         <ChevronRight className="w-3.5 h-3.5" />
                                       </span>
+                                    )}
+
+                                    {!db.name.includes('Raíz') && db.name !== '/' && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteDbClick(db);
+                                        }}
+                                        disabled={loading}
+                                        className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/15 rounded-lg transition-colors cursor-pointer"
+                                        title={`Eliminar base de datos '${db.name}'`}
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
                                     )}
                                   </div>
                                 </div>
